@@ -1,2 +1,5 @@
 explain.md
 /**.vscode**/
+**/build/**
+test_cuda
+test_cuda.cu
