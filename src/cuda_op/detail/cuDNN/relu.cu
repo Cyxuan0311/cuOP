@@ -1,4 +1,4 @@
-#include "cuda_op/detail/relu.hpp"
+#include "cuda_op/detail/cuDNN/relu.hpp"
 #include <cuda_runtime.h>
 #include <glog/logging.h>
 
