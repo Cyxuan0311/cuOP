@@ -6,7 +6,7 @@
 #include <numeric>
 #include <type_traits>
 #include <glog/logging.h>
-#include "memory_pool.hpp"
+#include "base/memory_pool.hpp"
 
 namespace cu_op_mem{
 
@@ -28,7 +28,7 @@ class Tensor{
                 CudaMemoryPool::Instance().Alloc(bytes())
             );
             if(!data_){
-                thorw std::runtime_error("Tensor allocate GPU memory failed");
+                throw std::runtime_error("Tensor allocate GPU memory failed");
             }
             LOG(INFO)<<"Tensor< "<<typeid(T).name()<<"> allocate "<<bytes()<<"bytes , element number "<<numel_;
         }
@@ -61,7 +61,7 @@ class Tensor{
         ~Tensor(){
             if(data_){
                 CudaMemoryPool::Instance().Free(data_,bytes());
-                LOG(INFO)<<"Tensor<"<<typeid(T).nama()<<"> release"
+                LOG(INFO)<<"Tensor<"<<typeid(T).name()<<"> release"
                     <<bytes()<<" bytes";
             }
         }

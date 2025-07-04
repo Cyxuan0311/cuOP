@@ -18,7 +18,7 @@ class CudaMemoryPool{
 
         void Free(void* ptr,std::size_t size);
 
-        void Free(void* ptr,std::size_t size);
+        //void Free(void* ptr,std::size_t size);
 
         void ReleaseAll();
 
