@@ -3,3 +3,4 @@ explain.md
 **/build/**
 test_cuda
 test_cuda.cu
+build.sh
