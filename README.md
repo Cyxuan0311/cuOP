@@ -33,7 +33,6 @@ cuOP/
 │       ├── test_gemm/      # GEMM 测试
 │       └── test_gemv/      # GEMV 测试
 ├── CMakeLists.txt          # 顶层 CMake 构建脚本
-├── build.sh                # 构建脚本
 ├── .clang-format           # 代码风格配置
 ├── License                 # 许可证
 └── README.md               # 项目说明
@@ -52,12 +51,12 @@ cuOP/
 
 ### 依赖
 - CUDA 11.5 及以上（推荐 CUDA 12.x）
-- cuBLAS
+- cuBLAS（如需 BLAS 算子）
 - cuDNN（如需深度学习算子）
 - glog
 - GTest（单元测试）
-- CMake 3.14 及以上
-- GCC 7.0 及以上
+- CMake 3.14 及以上 
+- GCC 7.0 及以上 
 - google benchmark（可选）
 
 ### 构建示例
