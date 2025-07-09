@@ -19,6 +19,7 @@ namespace cu_op_mem{
 
         if(output.data() == nullptr){
             output = Tensor<T>(input.shape());
+            //output = std::make_shared<Tensor<T>>(input->shape());
         }else if(output.name() != N){
             throw std::runtime_error("Relu's output and input tensor not match");
         }
