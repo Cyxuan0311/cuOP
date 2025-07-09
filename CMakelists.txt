@@ -1,0 +1,52 @@
+cmake_minimum_required(VERSION 3.14)
+project(cuOP LANGUAGES CXX CUDA)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# 查找CUDA
+find_package(CUDA REQUIRED)
+find_package(CUDAToolkit REQUIRED)
+find_path(CUDNN_INCLUDE_DIR cudnn.h)
+find_library(CUDNN_LIBRARY cudnn)
+find_package(Glog REQUIRED)
+
+include_directories(
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/include/data
+    ${CMAKE_SOURCE_DIR}/include/base
+    ${CMAKE_SOURCE_DIR}/include/cuda_op
+    ${CMAKE_SOURCE_DIR}/include/cuda_op/abstract
+    ${CMAKE_SOURCE_DIR}/include/cuda_op/detail
+    ${CMAKE_SOURCE_DIR}/include/cuda_op/detail/cuBlas
+    ${CMAKE_SOURCE_DIR}/include/cuda_op/detail/cuDNN
+    ${CUDNN_INCLUDE_DIR}
+)
+
+# 基础源文件
+set(BASE_SRC src/base/memory_pool.cu)
+
+# cuBLAS相关源文件
+file(GLOB SRC_CUBLAS src/cuda_op/detail/cuBlas/*.cu)
+list(APPEND SRC_CUBLAS ${BASE_SRC})
+
+# cuDNN相关源文件
+file(GLOB SRC_CUDNN src/cuda_op/detail/cuDNN/*.cu)
+list(APPEND SRC_CUDNN ${BASE_SRC})
+
+# cuBLAS动态库
+add_library(cuop_cublas SHARED ${SRC_CUBLAS})
+target_link_libraries(cuop_cublas PRIVATE CUDA::cublas Glog::glog)
+target_include_directories(cuop_cublas PRIVATE ${CMAKE_SOURCE_DIR}/include)
+set_target_properties(cuop_cublas PROPERTIES OUTPUT_NAME "cuop_cublas" LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/lib")
+
+# cuDNN动态库
+add_library(cuop_cudnn SHARED ${SRC_CUDNN})
+target_link_libraries(cuop_cudnn PRIVATE ${CUDNN_LIBRARY} CUDA::cudart Glog::glog)
+target_include_directories(cuop_cudnn PRIVATE ${CMAKE_SOURCE_DIR}/include ${CUDNN_INCLUDE_DIR})
+set_target_properties(cuop_cudnn PROPERTIES OUTPUT_NAME "cuop_cudnn" LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/lib")
+
+# 安装规则
+install(TARGETS cuop_cublas cuop_cudnn
+        LIBRARY DESTINATION lib)
+install(DIRECTORY include/ DESTINATION include)
