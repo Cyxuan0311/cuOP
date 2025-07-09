@@ -3,6 +3,8 @@
 ![C++17](https://img.shields.io/badge/C++-17-blue)
 ![CUDA](https://img.shields.io/badge/CUDA-11.5%2B-green)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+![CMake](https://img.shields.io/badge/CMake-3.20.x-red)
+![Repo Size](https://img.shields.io/github/repo-size/Cyxuan0311/cuOP)
 
 高性能 CUDA 算子与内存管理库，支持高效的张量运算、内存池优化和 HPC/深度学习常用算子。
 
