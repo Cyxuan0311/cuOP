@@ -1,23 +1,32 @@
-#include <glog/logging.h>
-#include <stdexcept>
 #include "cuda_op/detail/cuBlas/gemv.hpp"
+#include "util/status_code.hpp"
+#include <glog/logging.h>
+#include <cuda_runtime.h>
+#include <type_traits>
 
 namespace cu_op_mem {
 
 template <typename T>
-Gemv<T>::Gemv(bool transA, T alpha, T beta)
-    : transA_(transA), alpha_(alpha), beta_(beta) {
-    cublasStatus_t status = cublasCreate(&handle_);
-    if (status != CUBLAS_STATUS_SUCCESS) {
-        LOG(ERROR) << "Failed to create cuBLAS handle, status: " << status;
-        throw std::runtime_error("Failed to create cuBLAS handle");
+__global__ void gemv_kernel(int m, int n, T alpha, const T* A, const T* x, T beta, T* y, bool transA) {
+    int row = blockIdx.x * blockDim.x + threadIdx.x;
+    if (row < m) {
+        T sum = 0;
+        for (int col = 0; col < n; ++col) {
+            if (transA)
+                sum += A[col * m + row] * x[col];
+            else
+                sum += A[row * n + col] * x[col];
+        }
+        y[row] = alpha * sum + beta * y[row];
     }
 }
 
 template <typename T>
-Gemv<T>::~Gemv() {
-    cublasDestroy(handle_);
-}
+Gemv<T>::Gemv(bool transA, T alpha, T beta)
+    : transA_(transA), alpha_(alpha), beta_(beta) {}
+
+template <typename T>
+Gemv<T>::~Gemv() {}
 
 template <typename T>
 void Gemv<T>::SetWeight(const Tensor<T>& weight) {
@@ -26,33 +35,28 @@ void Gemv<T>::SetWeight(const Tensor<T>& weight) {
 }
 
 template <typename T>
-void Gemv<T>::Forward(const Tensor<T>& input, Tensor<T>& output) {
-    // input: (M, N), weight: (N,), output: (M,)
-    int m = input.shape(0);
-    int n = input.shape(1);
-
-    cublasOperation_t opA = transA_ ? CUBLAS_OP_T : CUBLAS_OP_N;
-    const T* A = input.data();
-    const T* x = weight_.data();
-    T* y = output.data();
-
-    int lda = transA_ ? m : n;
-    int incx = 1;
-    int incy = 1;
-
-    cublasStatus_t status;
-    if constexpr (std::is_same<T, float>::value) {
-        status = cublasSgemv(handle_, opA, m, n, &alpha_, A, lda, x, incx, &beta_, y, incy);
-    } else if constexpr (std::is_same<T, double>::value) {
-        status = cublasDgemv(handle_, opA, m, n, &alpha_, A, lda, x, incx, &beta_, y, incy);
-    } else {
-        LOG(ERROR) << "Unsupported data type for Gemv.";
-        throw std::runtime_error("Unsupported data type for Gemv");
+StatusCode Gemv<T>::Forward(const Tensor<T>& input, Tensor<T>& output) {
+    int m = static_cast<int>(input.shape()[0]);
+    int n = static_cast<int>(input.shape()[1]);
+    if (weight_.numel() != n || output.numel() != m) {
+        LOG(ERROR) << "Gemv: shape mismatch";
+        return StatusCode::SHAPE_MISMATCH;
     }
-    if (status != CUBLAS_STATUS_SUCCESS) {
-        LOG(ERROR) << "cuBLAS gemv failed, status: " << status;
-        throw std::runtime_error("cuBLAS gemv failed");
+    const T* d_A = input.data();
+    const T* d_x = weight_.data();
+    T* d_y = output.data();
+
+    int threads = 256;
+    int blocks = (m + threads - 1) / threads;
+    gemv_kernel<T><<<blocks, threads>>>(m, n, alpha_, d_A, d_x, beta_, d_y, transA_);
+
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        LOG(ERROR) << "gemv kernel failed: " << cudaGetErrorString(err);
+        return StatusCode::CUDA_ERROR;
     }
+    VLOG(1) << "Gemv: y = " << alpha_ << " * A * x + " << beta_ << " * y, m = " << m << ", n = " << n;
+    return StatusCode::SUCCESS;
 }
 
 // 显式实例化
