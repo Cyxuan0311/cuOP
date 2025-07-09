@@ -15,7 +15,7 @@ public:
     ~Gemv();
 
     // 前向计算：output = alpha * (transA ? A^T : A) * weight + beta * output
-    void Forward(const Tensor<T>& input, Tensor<T>& output) override;
+    StatusCode Forward(const Tensor<T>& input, Tensor<T>& output) override;
 
     // 设置权重向量（需与input的列维度匹配）
     void SetWeight(const Tensor<T>& weight);

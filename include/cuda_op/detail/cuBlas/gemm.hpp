@@ -12,7 +12,7 @@ class Gemm : public Operator<T> {
 
         ~Gemm();
 
-        void Forward(const Tensor<T>& input,Tensor<T>& output) override;
+        StatusCode Forward(const Tensor<T>& input,Tensor<T>& output) override;
 
         void SetWeight(const Tensor<T>& weight);
 
