@@ -30,8 +30,6 @@ cuOP/
 │       └── gemv/           # GEMV 性能测试
 ├── test/                   # 单元测试
 │   └── cuBlas/             # BLAS 算子测试
-│       ├── test_gemm/      # GEMM 测试
-│       └── test_gemv/      # GEMV 测试
 ├── CMakeLists.txt          # 顶层 CMake 构建脚本
 ├── .clang-format           # 代码风格配置
 ├── License                 # 许可证
@@ -43,7 +41,7 @@ cuOP/
 - **Tensor 管理**：高效多维张量分配与释放，基于自定义 CUDA 内存池。
 - **算子支持**：
   - cuBLAS：GEMM（矩阵乘法）、GEMV（矩阵-向量乘法）等 BLAS 算子
-  - cuDNN：ReLU 等深度学习常用算子
+  - cuDNN：Conv、MaxPool、SoftMax 等深度学习常用算子
 - **内存池优化**：减少频繁 cudaMalloc/cudaFree 带来的性能损耗。
 - **性能基准**：提供标准化的算子性能测试。
 
@@ -53,7 +51,7 @@ cuOP/
 - CUDA 11.5 及以上（推荐 CUDA 12.x）
 - cuBLAS（如需 BLAS 算子）
 - cuDNN（如需深度学习算子）
-- glog
+- glog (google log库)
 - GTest（单元测试）
 - CMake 3.14 及以上 
 - GCC 7.0 及以上 
@@ -68,14 +66,18 @@ make -j
 
 ### 运行基准测试
 ```bash
+# 示例
 ./bench/cuBlas/gemm/bench_gemm
 ./bench/cuBlas/gemv/bench_gemv
+....
 ```
 
 ### 运行单元测试
 ```bash
+# 示例
 ./test/cuBlas/test_gemm/test_gemm
 ./test/cuBlas/test_gemv/test_gemv
+....
 ```
 
 ## 常见问题
