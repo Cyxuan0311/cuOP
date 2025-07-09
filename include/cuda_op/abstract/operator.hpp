@@ -2,6 +2,7 @@
 #define OPERATOR_H_
 
 #include "data/tensor.hpp"
+#include "util/status_code.hpp"
 
 namespace cu_op_mem{
 
@@ -10,7 +11,7 @@ class Operator{
     public:
         virtual ~Operator() = default;
 
-        virtual void Forward(const Tensor<T>& input,Tensor<T>& output) = 0;
+        virtual StatusCode Forward(const Tensor<T>& input,Tensor<T>& output) = 0;
 };
 
 }
