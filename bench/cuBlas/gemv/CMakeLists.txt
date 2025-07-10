@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.18)  # 确保支持CUDA 12.8及compute_89架构
-project(bench_gemm LANGUAGES CXX CUDA)
+project(bench_gemv LANGUAGES CXX CUDA)
 
 # 设置C++和CUDA标准
 set(CMAKE_CXX_STANDARD 17)
