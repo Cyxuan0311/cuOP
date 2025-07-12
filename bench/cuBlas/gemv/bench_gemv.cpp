@@ -56,7 +56,7 @@ int main(int argc, char** argv){
     float ms = 0;
     cudaEventElapsedTime(&ms, start, stop);
 
-    LOG(INFO) << "Average GEMV time: " << ms / 10 << " ms ";
+    std::cout << "Average GEMV time: " << ms / 10 << " ms ";
 
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
