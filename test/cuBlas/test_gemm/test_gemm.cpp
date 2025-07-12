@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include "cuda_op/detail/cuBlas/gemm.hpp"
 #include <glog/logging.h>
-#include "data/tensor"
+#include "data/tensor.hpp"
 #include <cuda_runtime.h>
 
 using namespace cu_op_mem;
