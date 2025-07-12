@@ -37,7 +37,7 @@ int main(int argc, char** argv){
     Gemv<float> gemv;
     gemv.SetWeight(weight);
 
-    glog::INFO("Start first Forward call");
+    LOG(INFO) << "Start first Forward call";
     gemv.Forward(input, output);
     cudaDeviceSynchronize();
 
@@ -45,14 +45,14 @@ int main(int argc, char** argv){
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
 
-    glog::INFO("Start timing loop");
+    LOG(INFO) << "Start timing loop";
     cudaEventRecord(start);
     for(int i = 0; i < 10; ++i){
         gemv.Forward(input, output);
     }
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
-
+    
     float ms = 0;
     cudaEventElapsedTime(&ms, start, stop);
 
