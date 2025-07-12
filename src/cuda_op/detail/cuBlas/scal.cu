@@ -17,7 +17,7 @@ template <typename T>
 Scal<T>::Scal(T alpha) : alpha_(alpha) {}
 
 template <typename T>
-void Scal<T::SetAlpha(T alpha) {
+void Scal<T>::SetAlpha(T alpha) {
     alpha_ = alpha;
 }
 

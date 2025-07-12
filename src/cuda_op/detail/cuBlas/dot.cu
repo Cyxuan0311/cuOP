@@ -1,5 +1,5 @@
 #include "cuda_op/detail/cuBlas/dot.hpp"
-#include <glog/logging>
+#include <glog/logging.h>
 #include <cuda_runtime.h>
 #include <type_traits>
 
@@ -30,7 +30,7 @@ namespace cu_op_mem {
     Dot<T>::~Dot() {}
 
     template <typename T>
-    StatusCode Dot<T>::Forward(const Tensor<T>& x,const Tensor<T& y,T& result) {
+    StatusCode Dot<T>::Forward(const Tensor<T>& x,const Tensor<T>& y,T& result) {
         if(x.numel() != y.numel()){
             LOG(ERROR)<<"Dot: x and y must have same number of elements";
             return StatusCode::SHAPE_MISMATCH;
