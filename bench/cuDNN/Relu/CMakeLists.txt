@@ -38,7 +38,7 @@ add_executable(
 )
 
 # 链接库文件
-target_link_libraries(bench_gemm
+target_link_libraries(bench_relu
     ${CUDA_LIBRARIES}
     cublas
     cudart
