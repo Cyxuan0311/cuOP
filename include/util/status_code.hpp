@@ -7,7 +7,8 @@ enum class StatusCode {
     CUDA_ERROR,
     SHAPE_MISMATCH,
     UNSUPPORTED_TYPE,
-    UNKNOWN_ERROR
+    UNKNOWN_ERROR,
+    TENSOR_DIMONSION_MISMATCH
 };
 
 // 可选：将错误码转为字符串
