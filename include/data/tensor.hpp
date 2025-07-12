@@ -1,5 +1,5 @@
-#ifndef CUDA_TENSOR_H_
-#define CUDA_TENSOR_H_
+#ifndef CUDA_TENSOR_HPP_
+#define CUDA_TENSOR_HPP_
 
 #include <vector>
 #include <cstddef>
@@ -7,6 +7,7 @@
 #include <type_traits>
 #include <glog/logging.h>
 #include "base/memory_pool.hpp"
+#include <algorithm>
 #include <memory>
 
 namespace cu_op_mem{
