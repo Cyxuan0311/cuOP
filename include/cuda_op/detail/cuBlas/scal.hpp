@@ -5,6 +5,7 @@
 
 namespace cu_op_mem {
 
+template <typename T>
 class Scal : public Operator<T> {
     public:
         Scal(T alpha = 1);
