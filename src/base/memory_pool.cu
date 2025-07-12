@@ -5,6 +5,10 @@
 
 namespace cu_op_mem{
 
+std::mutex CudaMemoryPool::global_mutex_;
+std::unordered_map<std::size_t, std::deque<void*>> CudaMemoryPool::global_free_list_;
+thread_local std::unordered_map<std::size_t, std::deque<void*>> CudaMemoryPool::thread_free_list_;
+
 constexpr std::size_t ALIGN_BYTES = 256;
 const std::vector<std::size_t> kBlockSizes = {256, 512, 1024, 2048, 4096, 8192, 16384, 32768};
 constexpr std::size_t kBatchAllocCount = 8; // 每次批量分配的块数
