@@ -63,51 +63,57 @@ __global__ void maxpool2D_kernel(const T* input, T* output, int input_height, in
 }
 
 template <typename T>
-StatusCode MaxPool2D<T>::Forward(const Tensor<T>& input, Tensor<T>& output) {
-    // 参数检测
-    if (pool_height_ <= 0 || pool_width_ <= 0 || stride_height_ <= 0 || stride_width_ <= 0) {
-        LOG(ERROR) << "Invalid pool size or stride";
-        return StatusCode::SHAPE_MISMATCH;
-    }
-
-    const auto& input_shape = input.size();
-    if (input_size.size() != 2) {
-        LOG(ERROR) << "Input must be 2D tensor";
+StatusCode MaxPool2D<T>::Forward(const Tensor<T>& input, Tensor<T>& output, int dim_h, int dim_w) {
+    const auto& input_shape = input.shape();
+    if (input_shape.size() == 2) {
+        // 原二维实现
+        int input_height = input_shape[0];
+        int input_width = input_shape[1];
+        int output_height = (input_height - pool_height_) / stride_height_ + 1;
+        int output_width = (input_width - pool_width_) / stride_width_ + 1;
+        std::vector<std::size_t> output_shape = {static_cast<std::size_t>(output_height), static_cast<std::size_t>(output_width)};
+        output.resize(output_shape);
+        dim3 block_size(16, 16);
+        dim3 grid_size((output_width + block_size.x - 1) / block_size.x, (output_height + block_size.y - 1) / block_size.y);
+        maxpool2D_kernel<T><<<grid_size, block_size>>>(input.data(), output.data(), input_height, input_width, output_height, output_width, pool_height_, pool_width_, stride_height_, stride_width_);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) {
+            LOG(ERROR) << "MaxPool2D kernel failed: " << cudaGetErrorString(err);
+            return StatusCode::CUDA_ERROR;
+        }
+        cudaDeviceSynchronize();
+        return StatusCode::SUCCESS;
+    } else if (input_shape.size() == 4) {
+        // 四维张量 [N, C, H, W]
+        int N = input_shape[0];
+        int C = input_shape[1];
+        int H = input_shape[2];
+        int W = input_shape[3];
+        int output_height = (H - pool_height_) / stride_height_ + 1;
+        int output_width = (W - pool_width_) / stride_width_ + 1;
+        std::vector<std::size_t> output_shape = {static_cast<std::size_t>(N), static_cast<std::size_t>(C), static_cast<std::size_t>(output_height), static_cast<std::size_t>(output_width)};
+        output.resize(output_shape);
+        int batch = N * C;
+        const T* input_ptr = input.data();
+        T* output_ptr = output.data();
+        for (int i = 0; i < batch; ++i) {
+            const T* in = input_ptr + i * H * W;
+            T* out = output_ptr + i * output_height * output_width;
+            dim3 block_size(16, 16);
+            dim3 grid_size((output_width + block_size.x - 1) / block_size.x, (output_height + block_size.y - 1) / block_size.y);
+            maxpool2D_kernel<T><<<grid_size, block_size>>>(in, out, H, W, output_height, output_width, pool_height_, pool_width_, stride_height_, stride_width_);
+        }
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) {
+            LOG(ERROR) << "MaxPool2D kernel failed: " << cudaGetErrorString(err);
+            return StatusCode::CUDA_ERROR;
+        }
+        cudaDeviceSynchronize();
+        return StatusCode::SUCCESS;
+    } else {
+        LOG(ERROR) << "MaxPool2D only supports 2D or 4D input, got " << input_shape.size() << "D";
         return StatusCode::TENSOR_DIMONSION_MISMATCH;
     }
-
-    // 计算输出的形状
-    int input_height  = input_shape[0];
-    int input_width   = input_shape[1];
-    int output_height = (input_height - pool_height_) / stride_height_ + 1;
-    int output_width  = (input_width - pool_width_) / stride_width_ + 1;
-
-    std::vector<int> output_shape = {output_height, output_width};
-    output.resize(output_shape);
-
-    // 配置核函数相关的执行参数
-    dim3 block_size(16, 16);
-    dim3 grid_size((output_height + block_size.x - 1) / block_size.x, (output_width + block_size.y - 1) / block_size.y);
-
-    LOG(INFO) << "MaxPool2D launch: grid = (" << grid_size.x << ", " << grid_size.y << "),block = (" << block_size.x
-              << ", " << block_size.y << ")";
-
-    // 执行核函数
-    maxpool2D_kernel<T>
-        <<<grid_size, block_size>>>(input.data(), output.data(), input_height, input_width, output_height, output_width,
-                                    pool_height_, pool_width_, stride_height_, stride_width_)
-
-        // 检查CUDA的错误
-        cudaError_t err = cudaGetLastError();
-    if (err != cudaSuccess) {
-        LOG(ERROR) << "MaxPool2D kernel failed: " << cudaGetErrorString();
-        return StatusCode::CUDA_ERROR;
-    }
-
-    // 同步设备
-    cudaDeviceSynchronize();
-
-    return StatusCode::SUCCESS;
 }
 
 template class MaxPool2D<float>;
