@@ -96,48 +96,78 @@ __global__ void softmax_kernel(const T* input, T* output, std::size_t rows, std:
     }
 }
 
+// 新的 kernel，支持 batch 维度和任意 softmax 维度（dim）
 template <typename T>
-StatusCode Softmax<T>::Forward(const Tensor<T>& input, Tensor<T>& output) {
-    // 获取输入张量的维度信息
+__global__ void softmax_nd_kernel(const T* input, T* output, std::size_t batch, std::size_t dim_size, std::size_t inner_stride, std::size_t outer_stride) {
+    // 每个block处理一个softmax向量
+    std::size_t idx = blockIdx.x;
+    if (idx >= batch) return;
+    const T* in_ptr = input + idx * inner_stride;
+    T* out_ptr = output + idx * inner_stride;
+    // 1. 找最大值
+    T max_val = -INFINITY;
+    for (std::size_t i = threadIdx.x; i < dim_size; i += blockDim.x) {
+        T v = in_ptr[i * outer_stride];
+        max_val = max(max_val, v);
+    }
+    max_val = blockReduceMax(max_val);
+    __shared__ T row_max;
+    if (threadIdx.x == 0) row_max = max_val;
+    __syncthreads();
+    // 2. 计算exp和sum
+    T sum = 0;
+    for (std::size_t i = threadIdx.x; i < dim_size; i += blockDim.x) {
+        T v = exp(in_ptr[i * outer_stride] - row_max);
+        out_ptr[i * outer_stride] = v;
+        sum += v;
+    }
+    sum = blockReduceSum(sum);
+    __shared__ T row_sum;
+    if (threadIdx.x == 0) row_sum = sum;
+    __syncthreads();
+    // 3. 归一化
+    for (std::size_t i = threadIdx.x; i < dim_size; i += blockDim.x) {
+        out_ptr[i * outer_stride] /= row_sum;
+    }
+}
+
+template <typename T>
+StatusCode Softmax<T>::Forward(const Tensor<T>& input, Tensor<T>& output, int dim) {
     std::vector<std::size_t> shape = input.shape();
-    
-    // 检查输入是否为二维张量 [rows, cols]
-    if (shape.size() != 2) {
-        LOG(ERROR) << "Softmax requires 2D tensor, but got " << shape.size() << "D tensor";
+    if (shape.size() < 2) {
+        LOG(ERROR) << "Softmax requires at least 2D tensor, got " << shape.size() << "D";
         return StatusCode::SHAPE_MISMATCH;
     }
-    
-    std::size_t rows = shape[0];
-    std::size_t cols = shape[1];
-    
-    // 确保输出张量已初始化且大小正确
+    if (dim < 0) dim += shape.size();
+    if (dim < 0 || dim >= (int)shape.size()) {
+        LOG(ERROR) << "Softmax dim out of range: " << dim;
+        return StatusCode::SHAPE_MISMATCH;
+    }
+    // 计算 batch, dim_size, inner_stride, outer_stride
+    std::size_t batch = 1, dim_size = shape[dim], inner_stride = 1, outer_stride = 1;
+    for (int i = 0; i < dim; ++i) batch *= shape[i];
+    for (int i = dim + 1; i < (int)shape.size(); ++i) inner_stride *= shape[i];
+    outer_stride = inner_stride;
+    batch *= inner_stride;
+    // 输出 shape 与输入一致
     if (output.data() == nullptr || output.shape() != shape) {
         output = Tensor<T>(shape);
     }
-    
-    // 配置核函数执行参数
+    // 仅支持 float/double
     const std::size_t threads_per_block = 256;
-    const std::size_t blocks_per_grid = rows;
-    
-    LOG(INFO) << "Softmax launch: blocks = " << blocks_per_grid 
-              << " , threads = " << threads_per_block 
-              << " , rows = " << rows 
-              << " , cols = " << cols;
-    
-    // 执行核函数
-    softmax_kernel<T><<<blocks_per_grid, threads_per_block>>>(
-        input.data(), output.data(), rows, cols);
-    
-    // 检查CUDA错误
+    const std::size_t blocks_per_grid = batch;
+    // 2D特例，调用原kernel
+    if (shape.size() == 2 && dim == 1) {
+        softmax_kernel<T><<<blocks_per_grid, threads_per_block>>>(input.data(), output.data(), shape[0], shape[1]);
+    } else {
+        softmax_nd_kernel<T><<<blocks_per_grid, threads_per_block>>>(input.data(), output.data(), batch, dim_size, inner_stride, outer_stride);
+    }
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
         LOG(ERROR) << "Softmax kernel failed: " << cudaGetErrorString(err);
         return StatusCode::CUDA_ERROR;
     }
-    
-    // 同步设备以确保所有操作完成
     cudaDeviceSynchronize();
-    
     return StatusCode::SUCCESS;
 }
 
