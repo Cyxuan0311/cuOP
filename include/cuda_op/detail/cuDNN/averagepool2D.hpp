@@ -14,7 +14,10 @@ class AveragePool2D : public Operator<T> {
           stride_height_(stride_height),
           stride_width_(stride_width) {}
 
-    StatusCode Forward(const Tensor<T>& input, Tensor<T>& output) override;
+    StatusCode Forward(const Tensor<T>& input, Tensor<T>& output, int dim_h = 2, int dim_w = 3);
+    StatusCode Forward(const Tensor<T>& input, Tensor<T>& output) override {
+        return Forward(input, output, 2, 3);
+    }
 
    private:
     int pool_height_;
