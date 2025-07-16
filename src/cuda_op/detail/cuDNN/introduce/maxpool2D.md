@@ -137,5 +137,20 @@ output[output_y * output_width + output_x] = max_val;
 - **同步开销**：`cudaDeviceSynchronize()` 会阻塞主机端执行，实际部署中可根据流水线设计优化同步策略。
 
 
+## 四维张量支持
+- 现已支持 shape.size() == 4 的输入（如 [N, C, H, W]），对每个 [N, C] 独立做池化。
+- 原二维接口完全兼容。
+
+### 四维用法示例
+```cpp
+Tensor<float> input({2, 3, 32, 32}); // 4D 输入
+Tensor<float> output;
+MaxPool2D<float> maxpool(2, 2, 2, 2);
+maxpool.Forward(input, output); // 自动对每个 [N, C] 做池化
+```
+
+### 注意事项
+- 支持 2D/4D 张量输入。
+
 ## 总结
 本实现通过CUDA共享内存和分块计算策略，高效并行化二维最大池化操作，适用于深度学习中的特征降维场景。核心内核 `maxpool2D_kernel` 聚焦内存访问优化，在保证计算正确性的同时，充分利用GPU的并行计算能力。

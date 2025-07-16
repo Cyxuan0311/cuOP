@@ -48,6 +48,18 @@ AveragePool2D<float> avgpool(2, 2, 2, 2); // 2x2窗口，步幅2
 avgpool.Forward(input, output);
 ```
 
+## 四维张量支持
+- 现已支持 shape.size() == 4 的输入（如 [N, C, H, W]），对每个 [N, C] 独立做池化。
+- 原二维接口完全兼容。
+
+### 四维用法示例
+```cpp
+Tensor<float> input({2, 3, 32, 32}); // 4D 输入
+Tensor<float> output;
+AveragePool2D<float> avgpool(2, 2, 2, 2);
+avgpool.Forward(input, output); // 自动对每个 [N, C] 做池化
+```
+
 ## 性能优化说明
 - 内核实现采用共享内存（tile）优化，减少全局内存访问。
 - 线程块协作处理池化窗口，适合大窗口和有重叠的情况。

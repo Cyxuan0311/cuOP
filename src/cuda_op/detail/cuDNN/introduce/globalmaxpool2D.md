@@ -37,3 +37,18 @@
 5.  执行必要的 CUDA 错误检查和设备同步。
 
 通过这种设计，`GlobalMaxPool2D` 算子能够高效、可扩展地处理不同大小的输入张量。
+
+## 四维张量支持
+- 现已支持 shape.size() == 4 的输入（如 [N, C, H, W]），对每个 [N, C] 独立做全局池化，输出 shape 为 [N, C, 1]。
+- 原二维接口完全兼容。
+
+### 四维用法示例
+```cpp
+Tensor<float> input({2, 3, 32, 32}); // 4D 输入
+Tensor<float> output;
+GlobalMaxPool2D<float> gmp;
+gmp.Forward(input, output); // 输出 shape 为 [2, 3, 1]
+```
+
+### 注意事项
+- 支持 2D/4D 张量输入。

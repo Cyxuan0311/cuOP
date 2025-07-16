@@ -176,3 +176,23 @@ __device__ T blockReduceMax(T val) {
 
 ## 总结
 本实现基于CUDA的并行计算模型，通过高效归约策略和数值稳定性优化，实现了高性能的Softmax算子。核心内核 `softmax_kernel` 充分利用Warp级通信与两级归约，在保证数值正确性的同时，最大化GPU的并行计算能力，适用于深度学习中的分类、注意力机制等场景。
+
+## 0. 多维/四维张量与 dim 支持
+
+- 现已支持 shape.size() >= 2 的多维张量（如 [N, C, H, W]），可在任意维度（如 channel/width）上做 softmax。
+- 新增 dim 参数，指定在哪一维做 softmax，兼容 PyTorch 的 `dim` 用法。
+- 自动展平其他维度为 batch，softmax 仅在目标维度做。
+- 原二维接口完全兼容。
+
+### 用法示例（四维张量）
+```cpp
+Tensor<float> input({2, 3, 4, 5}); // 4D 输入
+Tensor<float> output;
+Softmax<float> softmax;
+softmax.Forward(input, output, 1); // 在第1维（C）做softmax
+```
+
+### 注意事项
+- 支持 shape.size() >= 2 的任意张量。
+- dim 支持负数（如 -1 表示最后一维）。
+- 推荐用法与 PyTorch 保持一致。
