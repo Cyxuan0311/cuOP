@@ -122,3 +122,34 @@ TEST_F(SoftmaxTest, ForwardNegativeValues) {
         EXPECT_NEAR(h_result[i], expected[i], 1e-5);
     }
 }
+
+TEST_F(SoftmaxTest, Forward4DTensorDim3) {
+    // 测试4维张量，在最后一维做softmax
+    // shape: [2, 2, 2, 2]
+    float h_input[16] = {
+        1, 2, 3, 4, 5, 6, 7, 8,
+        -1, 0, 1, 2, -2, -1, 0, 1
+    };
+    float h_output[16] = {0};
+    Tensor<float> input({2, 2, 2, 2});
+    Tensor<float> output({2, 2, 2, 2});
+    cudaMemcpy(input.data(), h_input, sizeof(h_input), cudaMemcpyHostToDevice);
+    cudaMemcpy(output.data(), h_output, sizeof(h_output), cudaMemcpyHostToDevice);
+    Softmax<float> softmax;
+    softmax.Forward(input, output, 3); // 在最后一维做softmax
+    float h_result[16] = {0};
+    cudaMemcpy(h_result, output.data(), sizeof(h_result), cudaMemcpyDeviceToHost);
+    // 期望结果：每个最后一维做softmax
+    // 例如 [a, b] -> [exp(a)/(exp(a)+exp(b)), exp(b)/(exp(a)+exp(b))]
+    for (int i = 0; i < 8; ++i) {
+        float a = h_input[2*i];
+        float b = h_input[2*i+1];
+        float ea = expf(a);
+        float eb = expf(b);
+        float sum = ea + eb;
+        float expected0 = ea / sum;
+        float expected1 = eb / sum;
+        EXPECT_NEAR(h_result[2*i], expected0, 1e-5);
+        EXPECT_NEAR(h_result[2*i+1], expected1, 1e-5);
+    }
+}
