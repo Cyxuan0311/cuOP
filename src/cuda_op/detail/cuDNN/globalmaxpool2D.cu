@@ -33,63 +33,50 @@ __global__ void globalmaxpool2D_kernel(const T* input, T* output, int n) {
 }
 
 template <typename T>
-StatusCode GlobalMaxPool2D<T>::Forward(const Tensor<T>& input, Tensor<T>& output) {
+StatusCode GlobalMaxPool2D<T>::Forward(const Tensor<T>& input, Tensor<T>& output, int dim_h, int dim_w) {
     const auto& input_shape = input.shape();
-    if (input_shape.size() != 2) {
-        LOG(ERROR) << "Input must be 2D tensor";
-        return StatusCode::TENSOR_DIMONSION_MISMATCH;
-    }
-    int input_height = input_shape[0];
-    int input_width = input_shape[1];
-    int n = input_height * input_width;
-
-    if (n == 0) {
-        LOG(WARNING) << "Input tensor is empty";
+    if (input_shape.size() == 2) {
+        // 原二维实现
+        int input_height = input_shape[0];
+        int input_width = input_shape[1];
         output.resize({1});
-        T val = std::numeric_limits<T>::lowest();
-        cudaMemcpy(output.data(), &val, sizeof(T), cudaMemcpyHostToDevice);
-        return StatusCode::SUCCESS;
-    }
-
-    output.resize({1});
-
-    int threads = 512;
-    int blocks = (n + threads - 1) / threads;
-    LOG(INFO) << "GlobalMaxPool2D launch: n=" << n << ", blocks=" << blocks << ", threads=" << threads;
-    
-    if (blocks > 1) {
-        Tensor<T> partial_max_tensor;
-        partial_max_tensor.resize({(size_t)blocks});
-
-        globalmaxpool2D_kernel<T><<<blocks, threads, threads * sizeof(T)>>>(
-            input.data(), partial_max_tensor.data(), n);
-        
-        cudaError_t err = cudaGetLastError();
-        if (err != cudaSuccess) {
-            LOG(ERROR) << "GlobalMaxPool2D kernel (pass 1) failed: " << cudaGetErrorString(err);
-            return StatusCode::CUDA_ERROR;
-        }
-
-        LOG(INFO) << "GlobalMaxPool2D launch (pass 2): n=" << blocks << ", blocks=1, threads=" << threads;
-        globalmaxpool2D_kernel<T><<<1, threads, threads * sizeof(T)>>>(
-            partial_max_tensor.data(), output.data(), blocks);
-        err = cudaGetLastError();
-        if (err != cudaSuccess) {
-            LOG(ERROR) << "GlobalMaxPool2D kernel (pass 2) failed: " << cudaGetErrorString(err);
-            return StatusCode::CUDA_ERROR;
-        }
-    } else {
-        globalmaxpool2D_kernel<T><<<1, threads, threads * sizeof(T)>>>(
-            input.data(), output.data(), n);
+        int threads = 256;
+        globalmaxpool2D_kernel<T><<<1, threads>>>(input.data(), output.data(), input_height, input_width);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) {
             LOG(ERROR) << "GlobalMaxPool2D kernel failed: " << cudaGetErrorString(err);
             return StatusCode::CUDA_ERROR;
         }
+        cudaDeviceSynchronize();
+        return StatusCode::SUCCESS;
+    } else if (input_shape.size() == 4) {
+        // 四维张量 [N, C, H, W]
+        int N = input_shape[0];
+        int C = input_shape[1];
+        int H = input_shape[2];
+        int W = input_shape[3];
+        std::vector<std::size_t> output_shape = {static_cast<std::size_t>(N), static_cast<std::size_t>(C), 1};
+        output.resize(output_shape);
+        int batch = N * C;
+        const T* input_ptr = input.data();
+        T* output_ptr = output.data();
+        for (int i = 0; i < batch; ++i) {
+            const T* in = input_ptr + i * H * W;
+            T* out = output_ptr + i;
+            int threads = 256;
+            globalmaxpool2D_kernel<T><<<1, threads>>>(in, out, H, W);
+        }
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) {
+            LOG(ERROR) << "GlobalMaxPool2D kernel failed: " << cudaGetErrorString(err);
+            return StatusCode::CUDA_ERROR;
+        }
+        cudaDeviceSynchronize();
+        return StatusCode::SUCCESS;
+    } else {
+        LOG(ERROR) << "GlobalMaxPool2D only supports 2D or 4D input, got " << input_shape.size() << "D";
+        return StatusCode::TENSOR_DIMONSION_MISMATCH;
     }
-
-    cudaDeviceSynchronize();
-    return StatusCode::SUCCESS;
 }
 
 template class GlobalMaxPool2D<float>;
