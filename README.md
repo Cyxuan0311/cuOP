@@ -61,11 +61,12 @@ cuOP/
 
 ### 构建示例
 ```bash
+git clone https://github.com/Cyxuan0311/cuOP.git
 mkdir build && cd build
 cmake ..
 make -j
 ```
-
+编译好后会在项目根下的**lib**目录下生成对应的动态库文件，比如会有Blas库或DNN库。
 ### 运行基准测试
 ```bash
 # 示例
