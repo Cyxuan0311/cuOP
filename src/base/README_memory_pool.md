@@ -68,3 +68,45 @@ pool.ReleaseAll();
 
 ## 6. 联系与反馈
 如有问题或建议，请联系项目维护者。 
+
+---
+
+## CUDA Memory Pool 内存维护流程Mermaid图
+
+```mermaid
+flowchart TD
+    subgraph "分配流程"
+        A["上层调用 Alloc(size)"] --> B{"size 是否超最大分级？"}
+        B -- "是(超大块)" --> C["直接 cudaMalloc 分配，返回指针"]
+        B -- "否(常规块)" --> D{"线程局部缓存有空闲块？"}
+        D -- "有" --> E["从线程局部缓存分配"]
+        D -- "无" --> F{"全局池有空闲块？"}
+        F -- "有" --> G["批量取块，部分放入线程缓存"]
+        F -- "无" --> H["cudaMalloc 批量分配新块，部分放入线程缓存"]
+        E & G & H --> I["返回显存指针"]
+    end
+
+    subgraph "释放流程"
+        J["上层调用 Free(ptr, size)"] --> K{"size 是否超最大分级？"}
+        K -- "是(超大块)" --> L["直接 cudaFree 释放"]
+        K -- "否(常规块)" --> M["归还到线程局部缓存"]
+        M --> N{"线程缓存超阈值？"}
+        N -- "是" --> O["批量回收部分块到全局池"]
+        N -- "否" --> P["保留在本线程缓存"]
+    end
+
+    subgraph "全局释放"
+        Q["调用 ReleaseAll"] --> R["释放全局池所有空闲块 (cudaFree)"]
+    end
+
+    style A fill:#e6f7ff
+    style J fill:#e6f7ff
+    style Q fill:#e6f7ff
+```
+
+---
+
+**说明：**
+- 分配流程：优先用线程局部缓存，其次全局池，最后 cudaMalloc。超大块直接 cudaMalloc。
+- 释放流程：常规块归还线程缓存，超大块直接 cudaFree。线程缓存超阈值时批量回收至全局池。
+- 全局释放：ReleaseAll 只释放全局池空闲块，不影响线程缓存和已分配块。 
