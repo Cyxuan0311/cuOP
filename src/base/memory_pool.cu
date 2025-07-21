@@ -15,7 +15,7 @@ constexpr std::size_t kBatchAllocCount = 8; // 每次批量分配的块数
 constexpr std::size_t kThreadCacheMax = 32; // 线程缓存最大块数
 
 // 线程局部缓存
-thread_local std::unordered_map<std::size_t, std::deque<void*>> thread_free_list_;
+//thread_local std::unordered_map<std::size_t, std::deque<void*>> thread_free_list_;
 
 CudaMemoryPool& CudaMemoryPool::Instance(){
     static CudaMemoryPool instance;
