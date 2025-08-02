@@ -6,21 +6,33 @@
 
 namespace cu_op_mem {
 
-template <typename T>
-__global__ void gemm_kernel(int m, int n, int k, T alpha, const T* A, const T* B, T beta, T* C, bool transA, bool transB) {
-    int row = blockIdx.y * blockDim.y + threadIdx.y;
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
-    if (row < m && col < n) {
-        T sum = 0;
-        for (int i = 0; i < k; ++i) {
-            T a = transA ? A[i * m + row] : A[row * k + i];
-            T b = transB ? B[col * k + i] : B[i * n + col];
-            sum += a * b;
-        }
-        C[row * n + col] = alpha * sum + beta * C[row * n + col];
+// tile优化版kernel（只支持不转置，转置可扩展）
+template <typename T, int TILE>
+__global__ void gemm_kernel_tiled(int m, int n, int k, T alpha, const T* A, const T* B, T beta, T* C) {
+    __shared__ T As[TILE][TILE];
+    __shared__ T Bs[TILE][TILE];
+
+    int row = blockIdx.y * TILE + threadIdx.y;
+    int col = blockIdx.x * TILE + threadIdx.x;
+    T sum = 0;
+
+    for (int t = 0; t < (k + TILE - 1) / TILE; ++t) {
+        int tiled_col = t * TILE + threadIdx.x;
+        int tiled_row = t * TILE + threadIdx.y;
+        As[threadIdx.y][threadIdx.x] = (row < m && tiled_col < k) ? A[row * k + tiled_col] : 0;
+        Bs[threadIdx.y][threadIdx.x] = (col < n && tiled_row < k) ? B[tiled_row * n + col] : 0;
+        __syncthreads();
+
+        for (int i = 0; i < TILE; ++i)
+            sum += As[threadIdx.y][i] * Bs[i][threadIdx.x];
+        __syncthreads();
     }
+
+    if (row < m && col < n)
+        C[row * n + col] = alpha * sum + beta * C[row * n + col];
 }
 
+// 兼容原有接口，自动选择kernel
 template <typename T>
 Gemm<T>::Gemm(bool transA, bool transB, T alpha, T beta)
     : transA_(transA), transB_(transB), alpha_(alpha), beta_(beta) {}
@@ -47,9 +59,20 @@ StatusCode Gemm<T>::Forward(const Tensor<T>& input, Tensor<T>& output) {
     const T* d_B = weight_.data();
     T* d_C = output.data();
 
-    dim3 threads(16, 16);
-    dim3 blocks((n + 15) / 16, (m + 15) / 16);
-    gemm_kernel<T><<<blocks, threads>>>(m, n, k, alpha_, d_A, d_B, beta_, d_C, transA_, transB_);
+    constexpr int TILE = 16;
+    dim3 threads(TILE, TILE);
+    dim3 blocks((n + TILE - 1) / TILE, (m + TILE - 1) / TILE);
+
+    // 只优化不转置的情况，转置时仍用原kernel
+    if (!transA_ && !transB_) {
+        gemm_kernel_tiled<T, TILE><<<blocks, threads>>>(m, n, k, alpha_, d_A, d_B, beta_, d_C);
+    } else {
+        // 原始kernel支持转置
+        __global__ void gemm_kernel(int m, int n, int k, T alpha, const T* A, const T* B, T beta, T* C, bool transA, bool transB);
+        dim3 threads2(16, 16);
+        dim3 blocks2((n + 15) / 16, (m + 15) / 16);
+        gemm_kernel<T><<<blocks2, threads2>>>(m, n, k, alpha_, d_A, d_B, beta_, d_C, transA_, transB_);
+    }
 
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
@@ -64,4 +87,4 @@ StatusCode Gemm<T>::Forward(const Tensor<T>& input, Tensor<T>& output) {
 template class Gemm<float>;
 template class Gemm<double>;
 
-} // namespace cu_op_mem
+} //
