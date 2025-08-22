@@ -20,11 +20,22 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/include/cuda_op/detail
     ${CMAKE_SOURCE_DIR}/include/cuda_op/detail/cuBlas
     ${CMAKE_SOURCE_DIR}/include/cuda_op/detail/cuDNN
+    ${CMAKE_SOURCE_DIR}/include/jit
+    ${CMAKE_SOURCE_DIR}/include/jit/Blas
     ${CUDNN_INCLUDE_DIR}
 )
 
 # 基础源文件
 set(BASE_SRC src/base/memory_pool.cu)
+
+# JIT相关源文件
+set(JIT_SRC 
+    src/jit/jit_compiler.cu
+    src/jit/global_jit_manager.cu
+    src/jit/Blas/gemm_jit_plugin.cu
+    src/jit/Blas/gemv_jit_plugin.cu
+    src/jit/Blas/blas_jit_plugin_manager.cu
+)
 
 # cuBLAS相关源文件
 file(GLOB SRC_CUBLAS src/cuda_op/detail/cuBlas/*.cu)
@@ -33,6 +44,12 @@ list(APPEND SRC_CUBLAS ${BASE_SRC})
 # cuDNN相关源文件
 file(GLOB SRC_CUDNN src/cuda_op/detail/cuDNN/*.cu)
 list(APPEND SRC_CUDNN ${BASE_SRC})
+
+# JIT库
+add_library(cuop_jit SHARED ${JIT_SRC})
+target_link_libraries(cuop_jit PRIVATE CUDA::cudart CUDA::nvrtc Glog::glog)
+target_include_directories(cuop_jit PRIVATE ${CMAKE_SOURCE_DIR}/include)
+set_target_properties(cuop_jit PROPERTIES OUTPUT_NAME "cuop_jit" LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/lib")
 
 # cuBLAS动态库
 add_library(cuop_cublas SHARED ${SRC_CUBLAS})
@@ -47,6 +64,9 @@ target_include_directories(cuop_cudnn PRIVATE ${CMAKE_SOURCE_DIR}/include ${CUDN
 set_target_properties(cuop_cudnn PROPERTIES OUTPUT_NAME "cuop_cudnn" LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/lib")
 
 # 安装规则
-install(TARGETS cuop_cublas cuop_cudnn
+install(TARGETS cuop_cublas cuop_cudnn cuop_jit
         LIBRARY DESTINATION lib)
 install(DIRECTORY include/ DESTINATION include)
+
+# 添加JIT测试子目录
+add_subdirectory(test/JIT_test)
