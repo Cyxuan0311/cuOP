@@ -34,6 +34,7 @@ set(JIT_SRC
     src/jit/global_jit_manager.cu
     src/jit/Blas/gemm_jit_plugin.cu
     src/jit/Blas/gemv_jit_plugin.cu
+    src/jit/Blas/trsm_jit_plugin.cu
     src/jit/Blas/blas_jit_plugin_manager.cu
 )
 
