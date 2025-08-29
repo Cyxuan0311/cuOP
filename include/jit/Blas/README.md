@@ -9,11 +9,13 @@ include/jit/Blas/
 ├── blas_jit_plugins.hpp      # BLAS插件统一入口
 ├── gemm_jit_plugin.hpp       # GEMM JIT插件头文件
 ├── gemv_jit_plugin.hpp       # GEMV JIT插件头文件
+├── trsm_jit_plugin.hpp       # TRSM JIT插件头文件
 └── README.md                 # 本文件
 
 src/jit/Blas/
 ├── gemm_jit_plugin.cu        # GEMM JIT插件实现
 ├── gemv_jit_plugin.cu        # GEMV JIT插件实现
+├── trsm_jit_plugin.cu        # TRSM JIT插件实现
 └── blas_jit_plugin_manager.cu # BLAS插件管理器
 ```
 
@@ -33,6 +35,14 @@ src/jit/Blas/
 - **支持的内核类型**:
   - `basic`: 基础实现
   - `optimized`: 循环展开优化
+
+### 3. TRSM (Triangular Solve Matrix)
+- **功能**: 求解 `A * X = α * B` (A为三角矩阵)
+- **支持的内核类型**:
+  - `basic`: 基础前向替换实现
+  - `tiled`: 分块优化版本
+  - `warp_optimized`: Warp级优化
+  - `blocked`: 大矩阵分块优化
 
 ## 🚀 使用方法
 

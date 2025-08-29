@@ -5,6 +5,7 @@
 
 #include "jit/Blas/gemm_jit_plugin.hpp"
 #include "jit/Blas/gemv_jit_plugin.hpp"
+#include "jit/Blas/trsm_jit_plugin.hpp"
 
 namespace cu_op_mem {
 
