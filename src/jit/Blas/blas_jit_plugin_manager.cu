@@ -28,8 +28,17 @@ void BlasJITPluginManager::RegisterAllPlugins() {
         return std::make_unique<GemvJITPlugin>();
     };
     
+    // 注册TRSM插件
+    plugin_factories_["trsm"] = []() -> std::unique_ptr<IJITPlugin> {
+        return std::make_unique<TrsmJITPlugin>();
+    };
+    
+    plugin_factories_["Trsm"] = []() -> std::unique_ptr<IJITPlugin> {
+        return std::make_unique<TrsmJITPlugin>();
+    };
+    
     // 未来可以在这里添加更多BLAS插件
-    // 例如：GEMM_BATCHED、TRSM等
+    // 例如：GEMM_BATCHED、SYMM等
     
     VLOG(1) << "Registered " << plugin_factories_.size() << " BLAS JIT plugins";
 }
