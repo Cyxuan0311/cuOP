@@ -1,6 +1,7 @@
 #pragma once
 
 #include "jit_config.hpp"
+#include "jit_persistent_cache.hpp"
 #include <cuda_runtime.h>
 #include <nvrtc.h>
 #include <memory>
@@ -64,6 +65,12 @@ public:
     void ClearCache();
     void ClearExpiredCache();
     
+    // 持久化缓存管理
+    void EnablePersistentCache(bool enable);
+    bool IsPersistentCacheEnabled() const;
+    void SetPersistentCacheDirectory(const std::string& cache_dir);
+    std::string GetPersistentCacheDirectory() const;
+    
     // 配置管理
     void SetCompilationTimeout(int timeout_seconds);
     void SetMaxCacheSize(size_t max_size);
@@ -94,6 +101,10 @@ private:
     void LogCompileError(const std::string& error_message, const std::string& kernel_code,
                         const std::vector<std::string>& options);
     
+    // 持久化缓存相关
+    bool TryLoadFromPersistentCache(const std::string& cache_key, JITCompileResult& result);
+    void SaveToPersistentCache(const std::string& cache_key, const JITCompileResult& result);
+    
     // 成员变量
     std::unordered_map<std::string, CUfunction> kernel_cache_;
     std::unordered_map<std::string, std::chrono::system_clock::time_point> cache_timestamps_;
@@ -104,6 +115,10 @@ private:
     int compilation_timeout_seconds_ = 30;
     size_t max_cache_size_ = 1024 * 1024 * 1024; // 1GB
     bool debug_enabled_ = false;
+    
+    // 持久化缓存配置
+    bool persistent_cache_enabled_ = false;
+    std::string persistent_cache_dir_ = "./jit_cache";
     
     // 同步
     mutable std::mutex cache_mutex_;
