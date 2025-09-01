@@ -8,17 +8,33 @@ target_link_libraries(test_jit_system PRIVATE
     Glog::glog
 )
 
+# JIT持久化缓存测试
+add_executable(test_persistent_cache test_persistent_cache.cpp)
+target_link_libraries(test_persistent_cache PRIVATE 
+    cuop_jit 
+    cuop_cublas 
+    Glog::glog
+    z
+    crypto
+)
+
 # 设置测试属性
 set_tests_properties(test_jit_system PROPERTIES
     TIMEOUT 300
     ENVIRONMENT "CUDA_VISIBLE_DEVICES=0"
 )
 
+set_tests_properties(test_persistent_cache PROPERTIES
+    TIMEOUT 600
+    ENVIRONMENT "CUDA_VISIBLE_DEVICES=0"
+)
+
 # 添加测试
 add_test(NAME JIT_System_Test COMMAND test_jit_system)
+add_test(NAME JIT_Persistent_Cache_Test COMMAND test_persistent_cache)
 
 # 安装测试程序
-install(TARGETS test_jit_system
+install(TARGETS test_jit_system test_persistent_cache
     RUNTIME DESTINATION bin/tests/jit
 )
 
