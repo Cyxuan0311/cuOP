@@ -21,6 +21,12 @@ JITCompiler::JITCompiler() : nvrtc_initialized_(false) {
         return;
     }
     nvrtc_initialized_ = true;
+    
+    // 初始化持久化缓存
+    if (persistent_cache_enabled_) {
+        GlobalPersistentCacheManager::Instance().Initialize(persistent_cache_dir_);
+        LOG(INFO) << "Persistent cache initialized at: " << persistent_cache_dir_;
+    }
 }
 
 JITCompiler::~JITCompiler() {
@@ -46,7 +52,7 @@ JITCompileResult JITCompiler::CompileKernel(const std::string& kernel_code,
     // 生成缓存键
     std::string cache_key = GenerateKernelKey(kernel_code, options);
     
-    // 检查缓存
+    // 1. 检查内存缓存
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         auto it = kernel_cache_.find(cache_key);
@@ -65,20 +71,51 @@ JITCompileResult JITCompiler::CompileKernel(const std::string& kernel_code,
         }
     }
     
-    // 验证kernel代码
+    // 2. 尝试从持久化缓存加载
+    if (persistent_cache_enabled_) {
+        JITCompileResult cached_result;
+        if (TryLoadFromPersistentCache(cache_key, cached_result)) {
+            // 从持久化缓存成功加载，需要重新加载到CUDA模块
+            auto result = LoadKernelFromPTX(cached_result.ptx_code, kernel_name);
+            if (result.success) {
+                // 缓存到内存
+                std::lock_guard<std::mutex> lock(cache_mutex_);
+                kernel_cache_[cache_key] = result.kernel;
+                cache_timestamps_[cache_key] = std::chrono::system_clock::now();
+                
+                // 更新统计信息
+                {
+                    std::lock_guard<std::mutex> stats_lock(stats_mutex_);
+                    statistics_.cache_hits++;
+                    statistics_.total_saved_compilation_time += static_cast<size_t>(cached_result.compilation_time_ms);
+                }
+                
+                auto end_time = std::chrono::high_resolution_clock::now();
+                auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+                
+                LOG(INFO) << "Kernel loaded from persistent cache: " << kernel_name 
+                          << " (saved " << cached_result.compilation_time_ms << " ms)";
+                
+                return JITCompileResult(true, result.kernel, cached_result.ptx_code, "", 
+                                      duration.count() / 1000.0, options);
+            }
+        }
+    }
+    
+    // 3. 验证kernel代码
     if (!ValidateKernelCode(kernel_code)) {
         std::string error_msg = "Invalid kernel code";
         LogCompileError(error_msg, kernel_code, options);
         return JITCompileResult(false, nullptr, "", error_msg, 0.0, options);
     }
     
-    // 合并编译选项
+    // 4. 合并编译选项
     auto merged_options = MergeCompileOptions(options);
     
-    // 使用NVRTC编译
+    // 5. 使用NVRTC编译
     auto result = CompileWithNVRTC(kernel_code, kernel_name, merged_options);
     
-    // 更新统计信息
+    // 6. 更新统计信息
     {
         std::lock_guard<std::mutex> stats_lock(stats_mutex_);
         if (result.success) {
@@ -88,12 +125,17 @@ JITCompileResult JITCompiler::CompileKernel(const std::string& kernel_code,
         }
     }
     
-    // 如果编译成功，缓存kernel
+    // 7. 如果编译成功，缓存kernel
     if (result.success) {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         kernel_cache_[cache_key] = result.kernel;
         cache_timestamps_[cache_key] = std::chrono::system_clock::now();
         statistics_.active_kernels = kernel_cache_.size();
+        
+        // 8. 保存到持久化缓存
+        if (persistent_cache_enabled_) {
+            SaveToPersistentCache(cache_key, result);
+        }
     }
     
     return result;
@@ -390,6 +432,118 @@ std::vector<std::string> KernelTemplateManager::GetSupportedTemplates() const {
         names.push_back(name);
     }
     return names;
+}
+
+void JITCompiler::EnablePersistentCache(bool enable) {
+    persistent_cache_enabled_ = enable;
+    
+    if (enable && !persistent_cache_dir_.empty()) {
+        GlobalPersistentCacheManager::Instance().Initialize(persistent_cache_dir_);
+        LOG(INFO) << "Persistent cache enabled at: " << persistent_cache_dir_;
+    } else if (!enable) {
+        GlobalPersistentCacheManager::Instance().Cleanup();
+        LOG(INFO) << "Persistent cache disabled";
+    }
+}
+
+bool JITCompiler::IsPersistentCacheEnabled() const {
+    return persistent_cache_enabled_;
+}
+
+void JITCompiler::SetPersistentCacheDirectory(const std::string& cache_dir) {
+    persistent_cache_dir_ = cache_dir;
+    
+    if (persistent_cache_enabled_) {
+        GlobalPersistentCacheManager::Instance().Initialize(cache_dir);
+        LOG(INFO) << "Persistent cache directory updated to: " << cache_dir;
+    }
+}
+
+std::string JITCompiler::GetPersistentCacheDirectory() const {
+    return persistent_cache_dir_;
+}
+
+bool JITCompiler::TryLoadFromPersistentCache(const std::string& cache_key, JITCompileResult& result) {
+    try {
+        std::string kernel_name, ptx_code;
+        std::vector<std::string> compile_options;
+        
+        if (GlobalPersistentCacheManager::Instance().LoadKernel(cache_key, kernel_name, compile_options, ptx_code)) {
+            result.ptx_code = ptx_code;
+            result.compile_options = compile_options;
+            result.success = true;
+            
+            // 从元数据中恢复编译时间（如果可用）
+            auto metadata = GlobalPersistentCacheManager::Instance().GetKernelMetadata(cache_key);
+            if (metadata.compilation_time_ms > 0) {
+                result.compilation_time_ms = static_cast<double>(metadata.compilation_time_ms);
+            }
+            
+            VLOG(1) << "Successfully loaded kernel from persistent cache: " << cache_key;
+            return true;
+        }
+        
+        return false;
+        
+    } catch (const std::exception& e) {
+        LOG(WARNING) << "Failed to load from persistent cache: " << e.what();
+        return false;
+    }
+}
+
+void JITCompiler::SaveToPersistentCache(const std::string& cache_key, const JITCompileResult& result) {
+    try {
+        // 从kernel代码生成缓存键（这里需要重构以获取原始kernel代码）
+        std::string kernel_code = ""; // TODO: 需要从调用者传递
+        std::string kernel_name = "unknown"; // TODO: 需要从调用者传递
+        
+        GlobalPersistentCacheManager::Instance().SaveKernel(
+            cache_key, kernel_name, kernel_code, 
+            result.compile_options, result.ptx_code, 
+            result.compilation_time_ms
+        );
+        
+        VLOG(1) << "Successfully saved kernel to persistent cache: " << cache_key;
+        
+    } catch (const std::exception& e) {
+        LOG(WARNING) << "Failed to save to persistent cache: " << e.what();
+    }
+}
+
+JITCompileResult JITCompiler::LoadKernelFromPTX(const std::string& ptx_code, const std::string& kernel_name) {
+    JITCompileResult result;
+    
+    try {
+        // 加载PTX到CUDA模块
+        CUmodule module;
+        CUresult cu_result = cuModuleLoadData(&module, ptx_code.c_str());
+        if (cu_result != CUDA_SUCCESS) {
+            result.success = false;
+            result.error_message = "Failed to load PTX module: " + std::to_string(cu_result);
+            return result;
+        }
+        
+        // 获取kernel函数
+        CUfunction kernel;
+        cu_result = cuModuleGetFunction(&kernel, module, kernel_name.c_str());
+        if (cu_result != CUDA_SUCCESS) {
+            cuModuleUnload(module);
+            result.success = false;
+            result.error_message = "Failed to get kernel function: " + std::to_string(cu_result);
+            return result;
+        }
+        
+        result.success = true;
+        result.kernel = kernel;
+        result.ptx_code = ptx_code;
+        
+        return result;
+        
+    } catch (const std::exception& e) {
+        result.success = false;
+        result.error_message = "Exception while loading kernel from PTX: " + std::string(e.what());
+        return result;
+    }
 }
 
 } // namespace cu_op_mem 
