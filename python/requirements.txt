@@ -1,0 +1,26 @@
+# cuOP Python API 依赖包
+
+# 核心依赖
+numpy>=1.19.0
+pybind11>=2.10.0
+
+# 开发依赖
+pytest>=6.0
+pytest-cov>=2.10
+black>=21.0
+flake8>=3.8
+mypy>=0.800
+
+# 文档依赖
+sphinx>=4.0
+sphinx-rtd-theme>=1.0
+myst-parser>=0.15
+
+# 示例依赖
+matplotlib>=3.3.0
+jupyter>=1.0
+ipywidgets>=7.6
+
+# 可选依赖
+# cupy-cuda11x>=10.0.0  # CUDA 11.x支持
+# cupy-cuda12x>=12.0.0  # CUDA 12.x支持 
