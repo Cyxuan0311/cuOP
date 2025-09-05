@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>cuOP Performance Dashboard</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Socket.IO -->
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    
+    <!-- Custom CSS -->
+    <style>
+        .dashboard-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+        }
+        
+        .metric-card {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 1.5rem;
+            transition: transform 0.2s;
+        }
+        
+        .metric-card:hover {
+            transform: translateY(-2px);
+        }
+        
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .metric-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .chart-container {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 1.5rem;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-online {
+            background-color: #28a745;
+        }
+        
+        .status-offline {
+            background-color: #dc3545;
+        }
+        
+        .hotspot-item {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            border-radius: 0 5px 5px 0;
+        }
+        
+        .hotspot-function {
+            font-weight: bold;
+            color: #495057;
+        }
+        
+        .hotspot-time {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+        
+        .hotspot-percentage {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        
+        .memory-bar {
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 0.5rem;
+        }
+        
+        .memory-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #28a745, #ffc107, #dc3545);
+            transition: width 0.3s ease;
+        }
+        
+        .control-panel {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 1.5rem;
+        }
+        
+        .btn-custom {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            padding: 0.5rem 1.5rem;
+            border-radius: 25px;
+            transition: all 0.3s;
+        }
+        
+        .btn-custom:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            color: white;
+        }
+        
+        .loading-spinner {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+        
+        .error-message {
+            display: none;
+            background: #f8d7da;
+            color: #721c24;
+            padding: 1rem;
+            border-radius: 5px;
+            margin-bottom: 1rem;
+        }
+        
+        .success-message {
+            display: none;
+            background: #d4edda;
+            color: #155724;
+            padding: 1rem;
+            border-radius: 5px;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Dashboard Header -->
+    <div class="dashboard-header">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1 class="mb-0">
+                        <span class="status-indicator" id="statusIndicator"></span>
+                        cuOP Performance Dashboard
+                    </h1>
+                    <p class="mb-0 mt-2">Real-time performance monitoring and analysis</p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <div class="control-panel">
+                        <button class="btn btn-custom me-2" id="startMonitoringBtn">
+                            <i class="fas fa-play"></i> Start Monitoring
+                        </button>
+                        <button class="btn btn-outline-light me-2" id="stopMonitoringBtn">
+                            <i class="fas fa-stop"></i> Stop
+                        </button>
+                        <button class="btn btn-outline-light" id="refreshBtn">
+                            <i class="fas fa-sync"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container">
+        <!-- Messages -->
+        <div class="error-message" id="errorMessage"></div>
+        <div class="success-message" id="successMessage"></div>
+        
+        <!-- Loading Spinner -->
+        <div class="loading-spinner" id="loadingSpinner">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Loading performance data...</p>
+        </div>
+
+        <!-- Performance Overview -->
+        <div class="row" id="overviewSection">
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-value" id="totalExecutionTime">0 ms</div>
+                    <div class="metric-label">Total Execution Time</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-value" id="totalEvents">0</div>
+                    <div class="metric-label">Total Events</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-value" id="gpuUtilization">0%</div>
+                    <div class="metric-label">GPU Utilization</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-value" id="memoryBandwidth">0 GB/s</div>
+                    <div class="metric-label">Memory Bandwidth</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Memory Statistics -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="chart-container">
+                    <h5>Memory Usage</h5>
+                    <div class="memory-bar">
+                        <div class="memory-fill" id="memoryUsageBar" style="width: 0%"></div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-4">
+                            <small class="text-muted">Total Allocated</small>
+                            <div class="fw-bold" id="totalAllocated">0 MB</div>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted">Current Usage</small>
+                            <div class="fw-bold" id="currentUsage">0 MB</div>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted">Peak Usage</small>
+                            <div class="fw-bold" id="peakUsage">0 MB</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="chart-container">
+                    <h5>Memory Statistics</h5>
+                    <canvas id="memoryChart" width="400" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Events -->
+        <div class="row">
+            <div class="col-md-8">
+                <div class="chart-container">
+                    <h5>Performance Events Timeline</h5>
+                    <canvas id="eventsChart" width="400" height="200"></canvas>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="chart-container">
+                    <h5>Top Hotspots</h5>
+                    <div id="hotspotsList">
+                        <!-- Hotspots will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Auto-tuning Results -->
+        <div class="row">
+            <div class="col-12">
+                <div class="chart-container">
+                    <h5>Auto-tuning Results</h5>
+                    <div id="tuningResults">
+                        <!-- Tuning results will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recommendations -->
+        <div class="row">
+            <div class="col-12">
+                <div class="chart-container">
+                    <h5>Optimization Recommendations</h5>
+                    <div id="recommendationsList">
+                        <!-- Recommendations will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Font Awesome -->
+    <script src="https://kit.fontawesome.com/your-fontawesome-kit.js" crossorigin="anonymous"></script>
+    
+    <!-- Custom JavaScript -->
+    <script>
+        class PerformanceDashboard {
+            constructor() {
+                this.socket = io();
+                this.charts = {};
+                this.monitoringEnabled = false;
+                
+                this.initializeEventListeners();
+                this.initializeSocketIO();
+                this.loadInitialData();
+            }
+            
+            initializeEventListeners() {
+                document.getElementById('startMonitoringBtn').addEventListener('click', () => this.startMonitoring());
+                document.getElementById('stopMonitoringBtn').addEventListener('click', () => this.stopMonitoring());
+                document.getElementById('refreshBtn').addEventListener('click', () => this.refreshData());
+            }
+            
+            initializeSocketIO() {
+                this.socket.on('connect', () => {
+                    this.updateStatus(true);
+                    this.showMessage('Connected to cuOP Performance Dashboard', 'success');
+                });
+                
+                this.socket.on('disconnect', () => {
+                    this.updateStatus(false);
+                    this.showMessage('Disconnected from dashboard', 'error');
+                });
+                
+                this.socket.on('performance_update', (data) => {
+                    this.updatePerformanceData(data);
+                });
+                
+                this.socket.on('data_update', (data) => {
+                    this.updatePerformanceData(data);
+                });
+                
+                this.socket.on('error', (data) => {
+                    this.showMessage(data.message, 'error');
+                });
+            }
+            
+            async loadInitialData() {
+                this.showLoading(true);
+                
+                try {
+                    const [overview, events, memory, hotspots, tuning] = await Promise.all([
+                        this.fetchData('/api/performance/overview'),
+                        this.fetchData('/api/performance/events'),
+                        this.fetchData('/api/memory/stats'),
+                        this.fetchData('/api/hotspots/analysis'),
+                        this.fetchData('/api/tuning/results')
+                    ]);
+                    
+                    this.updatePerformanceData(overview);
+                    this.updateEventsChart(events);
+                    this.updateMemoryChart(memory);
+                    this.updateHotspotsList(hotspots);
+                    this.updateTuningResults(tuning);
+                    
+                    this.showLoading(false);
+                } catch (error) {
+                    this.showMessage('Failed to load performance data: ' + error.message, 'error');
+                    this.showLoading(false);
+                }
+            }
+            
+            async fetchData(url) {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return await response.json();
+            }
+            
+            updatePerformanceData(data) {
+                if (data.error) {
+                    this.showMessage(data.error, 'error');
+                    return;
+                }
+                
+                // Update overview metrics
+                document.getElementById('totalExecutionTime').textContent = 
+                    (data.total_execution_time || 0).toFixed(2) + ' ms';
+                document.getElementById('totalEvents').textContent = data.total_events || 0;
+                document.getElementById('gpuUtilization').textContent = 
+                    (data.gpu_utilization || 0).toFixed(1) + '%';
+                document.getElementById('memoryBandwidth').textContent = 
+                    (data.memory_bandwidth || 0).toFixed(2) + ' GB/s';
+                
+                // Update memory statistics
+                if (data.memory_stats) {
+                    const stats = data.memory_stats;
+                    document.getElementById('totalAllocated').textContent = 
+                        this.formatBytes(stats.total_allocated || 0);
+                    document.getElementById('currentUsage').textContent = 
+                        this.formatBytes(stats.current_usage || 0);
+                    document.getElementById('peakUsage').textContent = 
+                        this.formatBytes(stats.peak_usage || 0);
+                    
+                    // Update memory usage bar
+                    const usagePercent = stats.total_allocated > 0 ? 
+                        (stats.current_usage / stats.total_allocated) * 100 : 0;
+                    document.getElementById('memoryUsageBar').style.width = usagePercent + '%';
+                }
+                
+                // Update recommendations
+                if (data.recommendations) {
+                    this.updateRecommendationsList(data.recommendations);
+                }
+            }
+            
+            updateEventsChart(events) {
+                const ctx = document.getElementById('eventsChart').getContext('2d');
+                
+                if (this.charts.events) {
+                    this.charts.events.destroy();
+                }
+                
+                const eventNames = events.map(e => e.name || 'Unknown');
+                const eventDurations = events.map(e => e.duration || 0);
+                
+                this.charts.events = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: eventNames,
+                        datasets: [{
+                            label: 'Duration (ms)',
+                            data: eventDurations,
+                            backgroundColor: 'rgba(102, 126, 234, 0.8)',
+                            borderColor: 'rgba(102, 126, 234, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            }
+            
+            updateMemoryChart(memory) {
+                const ctx = document.getElementById('memoryChart').getContext('2d');
+                
+                if (this.charts.memory) {
+                    this.charts.memory.destroy();
+                }
+                
+                this.charts.memory = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Used', 'Free'],
+                        datasets: [{
+                            data: [memory.current_usage || 0, (memory.total_allocated || 0) - (memory.current_usage || 0)],
+                            backgroundColor: ['rgba(220, 53, 69, 0.8)', 'rgba(40, 167, 69, 0.8)'],
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                position: 'bottom'
+                            }
+                        }
+                    }
+                });
+            }
+            
+            updateHotspotsList(hotspots) {
+                const container = document.getElementById('hotspotsList');
+                container.innerHTML = '';
+                
+                hotspots.slice(0, 5).forEach(hotspot => {
+                    const item = document.createElement('div');
+                    item.className = 'hotspot-item';
+                    item.innerHTML = `
+                        <div class="hotspot-function">${hotspot.function_name || 'Unknown'}</div>
+                        <div class="hotspot-time">${(hotspot.avg_time || 0).toFixed(2)} ms avg</div>
+                        <div class="hotspot-percentage">${(hotspot.percentage || 0).toFixed(1)}%</div>
+                    `;
+                    container.appendChild(item);
+                });
+            }
+            
+            updateTuningResults(tuning) {
+                const container = document.getElementById('tuningResults');
+                container.innerHTML = '';
+                
+                if (tuning.length === 0) {
+                    container.innerHTML = '<p class="text-muted">No tuning results available</p>';
+                    return;
+                }
+                
+                tuning.forEach(result => {
+                    const item = document.createElement('div');
+                    item.className = 'tuning-result mb-3 p-3 border rounded';
+                    item.innerHTML = `
+                        <h6>${result.operator_name || 'Unknown Operator'}</h6>
+                        <p><strong>Best Performance:</strong> ${(result.best_performance || 0).toFixed(2)}</p>
+                        <p><strong>Iterations:</strong> ${result.iterations_used || 0}</p>
+                        <p><strong>Converged:</strong> ${result.converged ? 'Yes' : 'No'}</p>
+                    `;
+                    container.appendChild(item);
+                });
+            }
+            
+            updateRecommendationsList(recommendations) {
+                const container = document.getElementById('recommendationsList');
+                container.innerHTML = '';
+                
+                if (!recommendations || recommendations.length === 0) {
+                    container.innerHTML = '<p class="text-muted">No recommendations available</p>';
+                    return;
+                }
+                
+                recommendations.forEach((rec, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'recommendation-item mb-2 p-2 bg-light rounded';
+                    item.innerHTML = `
+                        <span class="badge bg-primary me-2">${index + 1}</span>
+                        ${rec}
+                    `;
+                    container.appendChild(item);
+                });
+            }
+            
+            async startMonitoring() {
+                try {
+                    const response = await fetch('/api/monitoring/start', { method: 'POST' });
+                    const result = await response.json();
+                    
+                    if (result.status === 'success') {
+                        this.monitoringEnabled = true;
+                        this.showMessage('Real-time monitoring started', 'success');
+                    } else {
+                        this.showMessage('Failed to start monitoring: ' + result.message, 'error');
+                    }
+                } catch (error) {
+                    this.showMessage('Failed to start monitoring: ' + error.message, 'error');
+                }
+            }
+            
+            async stopMonitoring() {
+                try {
+                    const response = await fetch('/api/monitoring/stop', { method: 'POST' });
+                    const result = await response.json();
+                    
+                    if (result.status === 'success') {
+                        this.monitoringEnabled = false;
+                        this.showMessage('Real-time monitoring stopped', 'success');
+                    } else {
+                        this.showMessage('Failed to stop monitoring: ' + result.message, 'error');
+                    }
+                } catch (error) {
+                    this.showMessage('Failed to stop monitoring: ' + error.message, 'error');
+                }
+            }
+            
+            async refreshData() {
+                await this.loadInitialData();
+                this.showMessage('Data refreshed', 'success');
+            }
+            
+            updateStatus(online) {
+                const indicator = document.getElementById('statusIndicator');
+                indicator.className = `status-indicator ${online ? 'status-online' : 'status-offline'}`;
+            }
+            
+            showMessage(message, type) {
+                const errorMsg = document.getElementById('errorMessage');
+                const successMsg = document.getElementById('successMessage');
+                
+                if (type === 'error') {
+                    errorMsg.textContent = message;
+                    errorMsg.style.display = 'block';
+                    successMsg.style.display = 'none';
+                } else {
+                    successMsg.textContent = message;
+                    successMsg.style.display = 'block';
+                    errorMsg.style.display = 'none';
+                }
+                
+                // Auto-hide after 5 seconds
+                setTimeout(() => {
+                    errorMsg.style.display = 'none';
+                    successMsg.style.display = 'none';
+                }, 5000);
+            }
+            
+            showLoading(show) {
+                document.getElementById('loadingSpinner').style.display = show ? 'block' : 'none';
+            }
+            
+            formatBytes(bytes) {
+                if (bytes === 0) return '0 B';
+                const k = 1024;
+                const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+        }
+        
+        // Initialize dashboard when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new PerformanceDashboard();
+        });
+    </script>
+</body>
+</html>
