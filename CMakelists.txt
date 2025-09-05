@@ -38,6 +38,14 @@ set(JIT_SRC
     src/jit/Blas/blas_jit_plugin_manager.cu
 )
 
+# 性能监控相关源文件
+set(PERFORMANCE_SRC
+    src/performance/performance_monitor.cu
+    src/performance/memory_analyzer.cu
+    src/performance/hotspot_analyzer.cu
+    src/performance/auto_tuner.cu
+)
+
 # cuBLAS相关源文件
 file(GLOB SRC_CUBLAS src/cuda_op/detail/cuBlas/*.cu)
 list(APPEND SRC_CUBLAS ${BASE_SRC})
@@ -52,6 +60,12 @@ target_link_libraries(cuop_jit PRIVATE CUDA::cudart CUDA::nvrtc Glog::glog)
 target_include_directories(cuop_jit PRIVATE ${CMAKE_SOURCE_DIR}/include)
 set_target_properties(cuop_jit PROPERTIES OUTPUT_NAME "cuop_jit" LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/lib")
 
+# 性能监控库
+add_library(cuop_performance SHARED ${PERFORMANCE_SRC})
+target_link_libraries(cuop_performance PRIVATE CUDA::cudart CUDA::nvrtc Glog::glog)
+target_include_directories(cuop_performance PRIVATE ${CMAKE_SOURCE_DIR}/include)
+set_target_properties(cuop_performance PROPERTIES OUTPUT_NAME "cuop_performance" LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/lib")
+
 # cuBLAS动态库
 add_library(cuop_cublas SHARED ${SRC_CUBLAS})
 target_link_libraries(cuop_cublas PRIVATE CUDA::cublas Glog::glog)
@@ -65,9 +79,12 @@ target_include_directories(cuop_cudnn PRIVATE ${CMAKE_SOURCE_DIR}/include ${CUDN
 set_target_properties(cuop_cudnn PROPERTIES OUTPUT_NAME "cuop_cudnn" LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/lib")
 
 # 安装规则
-install(TARGETS cuop_cublas cuop_cudnn cuop_jit
+install(TARGETS cuop_cublas cuop_cudnn cuop_jit cuop_performance
         LIBRARY DESTINATION lib)
 install(DIRECTORY include/ DESTINATION include)
 
 # 添加JIT测试子目录
 add_subdirectory(test/JIT_test)
+
+# 添加性能监控测试子目录
+add_subdirectory(test/performance)
