@@ -244,7 +244,8 @@ std::string PerformanceMonitor::GenerateReport() {
     
     std::ostringstream report;
     report << "=== cuOP Performance Analysis Report ===\n";
-    report << "Analysis Time: " << std::put_time(std::localtime(&analysis.analysis_time), "%Y-%m-%d %H:%M:%S") << "\n";
+    auto time_t_val = std::chrono::system_clock::to_time_t(analysis.analysis_time);
+    report << "Analysis Time: " << std::put_time(std::localtime(&time_t_val), "%Y-%m-%d %H:%M:%S") << "\n";
     report << "Total Execution Time: " << std::fixed << std::setprecision(2) << analysis.total_execution_time << " ms\n";
     report << "Total Events: " << analysis.events.size() << "\n\n";
     
@@ -356,7 +357,7 @@ AutoTuneResult PerformanceMonitor::AutoTune(const std::string& operator_name,
     if (result.performance_history.size() >= 10) {
         auto recent_performance = std::vector<double>(
             result.performance_history.end() - 10, result.performance_history.end());
-        double avg_recent = std::accumulate(recent_performance.begin(), recent_percent.end(), 0.0) / 10.0;
+        double avg_recent = std::accumulate(recent_performance.begin(), recent_performance.end(), 0.0) / 10.0;
         double improvement = (result.best_performance - avg_recent) / result.best_performance;
         result.converged = improvement < auto_tune_config_.improvement_threshold;
     }

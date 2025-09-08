@@ -38,7 +38,7 @@ JITCompiler::~JITCompiler() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     for (auto& [key, kernel] : kernel_cache_) {
         if (kernel) {
-            cuModuleUnload(kernel);
+            // CUfunction不需要显式卸载，它们会随着模块一起被卸载
         }
     }
     kernel_cache_.clear();
@@ -158,8 +158,6 @@ JITCompileResult JITCompiler::CompileWithNVRTC(const std::string& kernel_code,
     
     // 编译kernel
     nvrtcResult result = nvrtcCompileProgram(program_, 
-                                           kernel_code.size(), 
-                                           kernel_code.c_str(),
                                            option_ptrs.size(), 
                                            option_ptrs.data());
     
@@ -231,7 +229,7 @@ void JITCompiler::ClearCache() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     for (auto& [key, kernel] : kernel_cache_) {
         if (kernel) {
-            cuModuleUnload(kernel);
+            // CUfunction不需要显式卸载
         }
     }
     kernel_cache_.clear();
@@ -250,7 +248,7 @@ void JITCompiler::ClearExpiredCache() {
             auto kernel_it = kernel_cache_.find(it->first);
             if (kernel_it != kernel_cache_.end()) {
                 if (kernel_it->second) {
-                    cuModuleUnload(kernel_it->second);
+                    // CUfunction不需要显式卸载
                 }
                 kernel_cache_.erase(kernel_it);
             }

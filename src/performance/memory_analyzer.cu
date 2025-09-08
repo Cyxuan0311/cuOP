@@ -107,8 +107,8 @@ void MemoryAnalyzer::TrackAllocation(void* ptr, size_t size, const std::string& 
     current_usage_ += size;
     allocation_count_++;
     
-    if (current_usage_ > peak_usage_) {
-        peak_usage_ = current_usage_;
+    if (current_usage_.load() > peak_usage_.load()) {
+        peak_usage_.store(current_usage_.load());
     }
     
     // 添加到历史记录
@@ -323,7 +323,8 @@ std::string MemoryAnalyzer::GenerateReport() {
     
     std::ostringstream oss;
     oss << "=== cuOP Memory Analysis Report ===\n";
-    oss << "Analysis Time: " << std::put_time(std::localtime(&report.analysis_time), "%Y-%m-%d %H:%M:%S") << "\n\n";
+    auto time_t_val = std::chrono::system_clock::to_time_t(report.analysis_time);
+    oss << "Analysis Time: " << std::put_time(std::localtime(&time_t_val), "%Y-%m-%d %H:%M:%S") << "\n\n";
     
     // 基本统计
     oss << "=== Memory Statistics ===\n";
@@ -622,6 +623,22 @@ void MemoryAnalyzer::GenerateRecommendations(MemoryAnalysisReport& report) {
     if (report.allocation_count > report.free_count * 1.1) {
         report.recommendations.push_back("Allocation/free imbalance detected. Check for memory leaks.");
     }
+}
+
+MemoryAnalysisReport MemoryAnalyzer::GetMemoryStats() const {
+    std::lock_guard<std::mutex> lock(statistics_mutex_);
+    
+    MemoryAnalysisReport report;
+    report.total_allocated = total_allocated_.load();
+    report.total_freed = total_freed_.load();
+    report.current_usage = current_usage_.load();
+    report.peak_usage = peak_usage_.load();
+    report.allocation_count = allocation_count_.load();
+    report.free_count = free_count_.load();
+    report.fragmentation_ratio = 0.0; // 简化实现，避免const问题
+    report.analysis_time = std::chrono::high_resolution_clock::now();
+    
+    return report;
 }
 
 } // namespace cu_op_mem

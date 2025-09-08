@@ -3,6 +3,7 @@
 #include "jit/ijit_plugin.hpp"
 #include "jit/jit_compiler.hpp"
 #include "cuda_op/detail/cuBlas/gemm.hpp"
+#include <cuda.h>
 #include <memory>
 #include <unordered_map>
 
@@ -36,20 +37,22 @@ public:
     void SetGemmParams(bool transA, bool transB, float alpha, float beta);
     void SetWeight(const Tensor<float>& weight);
     static bool SupportsOperator(const std::string& op_name);
-
-private:
-    // 内核生成方法
+    
+    // 内核生成方法 (public for GemmKernelTemplate access)
     std::string GenerateKernelCode(const JITConfig& config);
     std::string GenerateBasicKernel(const JITConfig& config);
     std::string GenerateTiledKernel(const JITConfig& config);
     std::string GenerateWarpOptimizedKernel(const JITConfig& config);
     std::string GenerateTensorCoreKernel(const JITConfig& config);
     std::string GenerateBlockedKernel(const JITConfig& config);
+
+private:
     
     // 编译和执行方法
     CUfunction CompileKernel(const std::string& kernel_code, const std::string& kernel_name);
     void CacheKernel(const std::string& key, const CUfunction& kernel);
     CUfunction GetCachedKernel(const std::string& key);
+    std::string GenerateKernelKey(const std::string& kernel_code, const JITConfig& config);
     
     // 性能分析
     PerformanceProfile MeasurePerformance(const std::vector<Tensor<float>>& inputs,
@@ -121,6 +124,22 @@ private:
     std::vector<std::string> GetOptimizationFlags(const JITConfig& config) const;
     std::string GenerateKernelSignature(const JITConfig& config) const;
     std::string GenerateKernelBody(const std::string& kernel_type, const JITConfig& config) const;
+};
+
+// 插件工厂类
+class GemmJITPluginFactory : public IPluginFactory {
+public:
+    std::unique_ptr<IJITPlugin> CreatePlugin() override {
+        return std::make_unique<GemmJITPlugin>();
+    }
+    
+    bool SupportsOperator(const std::string& op_name) const override {
+        return op_name == "gemm" || op_name == "Gemm";
+    }
+    
+    std::string GetPluginType() const override {
+        return "gemm";
+    }
 };
 
 // 使用宏注册插件

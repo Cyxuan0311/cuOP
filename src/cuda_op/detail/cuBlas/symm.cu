@@ -28,7 +28,7 @@ __global__ void symm_kernel(int m, int n, T alpha, const T* A, const T* B, T bet
 }
 
 template <typename T>
-Symm<T>::Symm(cublasSideMode_t side, cublasSideMode_t uplo, T alpha, T beta)
+Symm<T>::Symm(cublasSideMode_t side, cublasFillMode_t uplo, T alpha, T beta)
     : side_(side), uplo_(uplo), alpha_(alpha), beta_(beta) {}
 
 template <typename T>

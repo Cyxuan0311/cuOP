@@ -96,15 +96,14 @@ StatusCode Convolution2D<T>::Forward(const Tensor<T>& input, Tensor<T>& output) 
 
         // output[n]: [out_channels, out_h * out_w]
         Tensor<T> out_mat({static_cast<std::size_t>(out_channels_), static_cast<std::size_t>(out_h * out_w)});
-        gemm.SetWeight(weight_.reshape({static_cast<std::size_t>(out_channels_), static_cast<std::size_t>(C * kernel_h_ * kernel_w_)}));
+        weight_.reshape({static_cast<std::size_t>(out_channels_), static_cast<std::size_t>(C * kernel_h_ * kernel_w_)});
+        gemm.SetWeight(weight_);
         StatusCode s = gemm.Forward(col, out_mat);
         if (s != StatusCode::SUCCESS) return s;
 
         // 加bias
-        if (bias_.size() == static_cast<std::size_t>(out_channels_)) {
+        if (bias_.numel() == static_cast<std::size_t>(out_channels_)) {
             int total_out = out_channels_ * out_h * out_w;
-            int threads2 = 256;
-            int blocks2 = (total_out + threads2 - 1) / threads2;
             const T* bias_ptr = bias_.data();
             T* out_ptr = out_mat.data();
             // bias add kernel
@@ -115,7 +114,11 @@ StatusCode Convolution2D<T>::Forward(const Tensor<T>& input, Tensor<T>& output) 
                     out[idx] += bias[c];
                 }
             };
-            bias_add_kernel<<<blocks2, threads2>>>(out_ptr, bias_ptr, out_channels_, out_h * out_w, total_out);
+            // 直接使用内联代码添加bias
+            for (int i = 0; i < total_out; ++i) {
+                int c = i / (out_h * out_w);
+                out_ptr[i] += bias_ptr[c];
+            }
             cudaError_t err2 = cudaGetLastError();
             if (err2 != cudaSuccess) {
                 LOG(ERROR) << "bias add kernel failed: " << cudaGetErrorString(err2);

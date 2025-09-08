@@ -3,6 +3,7 @@
 #include "jit/ijit_plugin.hpp"
 #include "jit/jit_compiler.hpp"
 #include "cuda_op/detail/cuBlas/trsm.hpp"
+#include <cuda.h>
 #include <memory>
 #include <unordered_map>
 

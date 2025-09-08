@@ -30,7 +30,7 @@ namespace cu_op_mem {
 
         int threads = 256;
         int blocks = (n + threads - 1) / threads;
-        copy_kernel<T><<<blocks,threads>>>>(n,d_x,d_y);
+        copy_kernel<T><<<blocks,threads>>>(n,d_x,d_y);
 
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) {

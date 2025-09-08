@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <fstream>
 #include <atomic>
+#include <thread>
 
 namespace cu_op_mem {
 
@@ -45,6 +46,9 @@ struct PersistentCacheStats {
     std::atomic<size_t> cache_evictions{0};           // 缓存驱逐次数
     std::atomic<size_t> cache_corruptions{0};         // 缓存损坏次数
     
+    // 默认构造函数
+    PersistentCacheStats() = default;
+    
     void Reset() {
         total_cached_kernels = 0;
         disk_cache_hits = 0;
@@ -54,6 +58,34 @@ struct PersistentCacheStats {
         cache_evictions = 0;
         cache_corruptions = 0;
     }
+    
+    // 移动构造函数
+    PersistentCacheStats(PersistentCacheStats&& other) noexcept
+        : total_cached_kernels(other.total_cached_kernels.load()),
+          disk_cache_hits(other.disk_cache_hits.load()),
+          disk_cache_misses(other.disk_cache_misses.load()),
+          total_disk_cache_size(other.total_disk_cache_size.load()),
+          total_saved_compilation_time(other.total_saved_compilation_time.load()),
+          cache_evictions(other.cache_evictions.load()),
+          cache_corruptions(other.cache_corruptions.load()) {}
+    
+    // 移动赋值操作符
+    PersistentCacheStats& operator=(PersistentCacheStats&& other) noexcept {
+        if (this != &other) {
+            total_cached_kernels = other.total_cached_kernels.load();
+            disk_cache_hits = other.disk_cache_hits.load();
+            disk_cache_misses = other.disk_cache_misses.load();
+            total_disk_cache_size = other.total_disk_cache_size.load();
+            total_saved_compilation_time = other.total_saved_compilation_time.load();
+            cache_evictions = other.cache_evictions.load();
+            cache_corruptions = other.cache_corruptions.load();
+        }
+        return *this;
+    }
+    
+    // 删除复制构造函数和复制赋值操作符
+    PersistentCacheStats(const PersistentCacheStats&) = delete;
+    PersistentCacheStats& operator=(const PersistentCacheStats&) = delete;
 };
 
 // 缓存策略配置
@@ -138,7 +170,7 @@ private:
     std::string GetCurrentEnvironmentSignature() const;
     
     bool SaveMetadata(const std::string& cache_key, const CacheMetadata& metadata);
-    bool LoadMetadata(const std::string& cache_key, CacheMetadata& metadata);
+    bool LoadMetadata(const std::string& cache_key, CacheMetadata& metadata) const;
     bool SavePTXCode(const std::string& cache_key, const std::string& ptx_code);
     bool LoadPTXCode(const std::string& cache_key, std::string& ptx_code);
     
@@ -146,6 +178,8 @@ private:
     void PerformCacheMaintenance();
     void StartMaintenanceThread();
     void StopMaintenanceThread();
+    void ScanExistingCache();
+    void SaveStatistics();
     
     // 压缩相关
     std::vector<uint8_t> CompressData(const std::string& data) const;
@@ -200,6 +234,9 @@ public:
                    std::string& ptx_code);
     
     bool IsKernelCached(const std::string& cache_key) const;
+    
+    // 获取内核元数据
+    CacheMetadata GetKernelMetadata(const std::string& cache_key) const;
     
     // 统计和配置
     PersistentCacheStats GetStats() const;

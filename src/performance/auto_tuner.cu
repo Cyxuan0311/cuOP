@@ -429,12 +429,12 @@ void AutoTuner::BackgroundTuning() {
 
 void AutoTuner::ProcessTuningResults() {
     // 处理调优结果
-    LOG(DEBUG) << "Processing tuning results";
+    VLOG(1) << "Processing tuning results";
 }
 
 void AutoTuner::UpdateTuningStrategy() {
     // 更新调优策略
-    LOG(DEBUG) << "Updating tuning strategy";
+    VLOG(1) << "Updating tuning strategy";
 }
 
 std::string AutoTuner::GenerateOptimizationSummary(const TuningResult& result) {

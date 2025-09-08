@@ -13,7 +13,7 @@ class Dot : public Operator<T> {
 
         StatusCode Forward(const Tensor<T>& x,const Tensor<T>& y,T& result);
 
-        StatusCode Forward(const Tensor<T>& input,Tenspr<T>& output) override {
+        StatusCode Forward(const Tensor<T>& input,Tensor<T>& output) override {
             return StatusCode::UNSUPPORTED_TYPE;
         }
 };

@@ -5,7 +5,8 @@ cmake_minimum_required(VERSION 3.14)
 find_package(GTest REQUIRED)
 find_package(CUDA REQUIRED)
 find_package(CUDAToolkit REQUIRED)
-find_package(Glog REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GLOG REQUIRED libglog)
 
 # Include directories
 include_directories(
@@ -14,6 +15,7 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/include/util
     ${CMAKE_SOURCE_DIR}/include/jit
     ${CMAKE_SOURCE_DIR}/include/base
+    ${GLOG_INCLUDE_DIRS}
 )
 
 # Performance monitor test executable
@@ -26,10 +28,11 @@ target_link_libraries(test_performance_monitor
     GTest::gtest_main
     CUDA::cudart
     CUDA::nvrtc
-    Glog::glog
+    ${GLOG_LIBRARIES}
     pthread
     dl
     rt
+    cuop_performance
 )
 
 # Set properties

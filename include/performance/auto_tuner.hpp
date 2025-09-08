@@ -127,6 +127,7 @@ private:
     std::vector<double> performance_history_;
     std::vector<std::unordered_map<std::string, std::string>> parameter_history_;
     
+    std::string GenerateRandomValue(const ParameterDefinition& param);
     double CalculateAcquisitionFunction(const std::unordered_map<std::string, std::string>& params);
     double CalculateExpectedImprovement(const std::unordered_map<std::string, std::string>& params);
 };
@@ -223,9 +224,9 @@ private:
     // 成员变量
     std::atomic<bool> tuning_enabled_;
     std::atomic<bool> real_time_monitoring_;
-    std::mutex config_mutex_;
-    std::mutex results_mutex_;
-    std::mutex strategy_mutex_;
+    mutable std::mutex config_mutex_;
+    mutable std::mutex results_mutex_;
+    mutable std::mutex strategy_mutex_;
     
     TuningConfig tuning_config_;
     std::vector<ParameterDefinition> parameters_;

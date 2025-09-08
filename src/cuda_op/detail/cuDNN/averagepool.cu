@@ -1,4 +1,4 @@
-#include "cuda_op/detail/cuDNN/averagepool2D.hpp"
+#include "cuda_op/detail/cuDNN/averagepool.hpp"
 #include <cuda_runtime.h>
 #include <glog/logging.h>
 

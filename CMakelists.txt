@@ -7,9 +7,21 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # 查找CUDA
 find_package(CUDA REQUIRED)
 find_package(CUDAToolkit REQUIRED)
+
+# 查找cuDNN (可选)
 find_path(CUDNN_INCLUDE_DIR cudnn.h)
 find_library(CUDNN_LIBRARY cudnn)
-find_package(Glog REQUIRED)
+
+# 查找glog
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GLOG REQUIRED libglog)
+
+# 查找jsoncpp
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(JSONCPP REQUIRED jsoncpp)
+
+# 设置CUDA架构
+set(CMAKE_CUDA_ARCHITECTURES 75 80 86 89)
 
 include_directories(
     ${CMAKE_SOURCE_DIR}/include
@@ -22,8 +34,15 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/include/cuda_op/detail/cuDNN
     ${CMAKE_SOURCE_DIR}/include/jit
     ${CMAKE_SOURCE_DIR}/include/jit/Blas
-    ${CUDNN_INCLUDE_DIR}
+    ${CMAKE_SOURCE_DIR}/include/performance
+    ${GLOG_INCLUDE_DIRS}
+    ${JSONCPP_INCLUDE_DIRS}
 )
+
+# 只在找到cuDNN时添加cuDNN包含目录
+if(CUDNN_INCLUDE_DIR)
+    include_directories(${CUDNN_INCLUDE_DIR})
+endif()
 
 # 基础源文件
 set(BASE_SRC src/base/memory_pool.cu)
@@ -32,6 +51,7 @@ set(BASE_SRC src/base/memory_pool.cu)
 set(JIT_SRC 
     src/jit/jit_compiler.cu
     src/jit/global_jit_manager.cu
+    src/jit/jit_persistent_cache.cu
     src/jit/Blas/gemm_jit_plugin.cu
     src/jit/Blas/gemv_jit_plugin.cu
     src/jit/Blas/trsm_jit_plugin.cu
@@ -56,30 +76,31 @@ list(APPEND SRC_CUDNN ${BASE_SRC})
 
 # JIT库
 add_library(cuop_jit SHARED ${JIT_SRC})
-target_link_libraries(cuop_jit PRIVATE CUDA::cudart CUDA::nvrtc Glog::glog)
+target_link_libraries(cuop_jit PRIVATE CUDA::cudart CUDA::nvrtc ${GLOG_LIBRARIES} z crypto stdc++fs)
 target_include_directories(cuop_jit PRIVATE ${CMAKE_SOURCE_DIR}/include)
 set_target_properties(cuop_jit PROPERTIES OUTPUT_NAME "cuop_jit" LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/lib")
 
 # 性能监控库
 add_library(cuop_performance SHARED ${PERFORMANCE_SRC})
-target_link_libraries(cuop_performance PRIVATE CUDA::cudart CUDA::nvrtc Glog::glog)
+target_link_libraries(cuop_performance PRIVATE CUDA::cudart CUDA::nvrtc ${GLOG_LIBRARIES} ${JSONCPP_LIBRARIES})
 target_include_directories(cuop_performance PRIVATE ${CMAKE_SOURCE_DIR}/include)
 set_target_properties(cuop_performance PROPERTIES OUTPUT_NAME "cuop_performance" LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/lib")
 
 # cuBLAS动态库
 add_library(cuop_cublas SHARED ${SRC_CUBLAS})
-target_link_libraries(cuop_cublas PRIVATE CUDA::cublas Glog::glog)
+target_link_libraries(cuop_cublas PRIVATE CUDA::cublas ${GLOG_LIBRARIES})
 target_include_directories(cuop_cublas PRIVATE ${CMAKE_SOURCE_DIR}/include)
 set_target_properties(cuop_cublas PROPERTIES OUTPUT_NAME "cuop_cublas" LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/lib")
 
-# cuDNN动态库
+# 深度学习算子库 (自定义CUDA实现，不依赖cuDNN库)
 add_library(cuop_cudnn SHARED ${SRC_CUDNN})
-target_link_libraries(cuop_cudnn PRIVATE ${CUDNN_LIBRARY} CUDA::cudart Glog::glog)
-target_include_directories(cuop_cudnn PRIVATE ${CMAKE_SOURCE_DIR}/include ${CUDNN_INCLUDE_DIR})
-set_target_properties(cuop_cudnn PROPERTIES OUTPUT_NAME "cuop_cudnn" LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/lib")
+target_link_libraries(cuop_dnn PRIVATE CUDA::cudart ${GLOG_LIBRARIES})
+target_include_directories(cuop_dnn PRIVATE ${CMAKE_SOURCE_DIR}/include)
+set_target_properties(cuop_dnn PROPERTIES OUTPUT_NAME "cuop_dnn" LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/lib")
+message(STATUS "Building cuop_dnn library with custom CUDA implementations")
 
 # 安装规则
-install(TARGETS cuop_cublas cuop_cudnn cuop_jit cuop_performance
+install(TARGETS cuop_cublas cuop_dnn cuop_jit cuop_performance
         LIBRARY DESTINATION lib)
 install(DIRECTORY include/ DESTINATION include)
 

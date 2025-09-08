@@ -28,12 +28,19 @@ struct JITConfig {
     std::vector<int> tile_sizes = {16, 32, 64};        // 瓦片大小选项
     int num_stages = 2;                        // 流水线阶段数
     bool use_tensor_core = true;               // 使用Tensor Core
+    int block_size = 256;                      // 默认块大小
+    std::string kernel_type = "default";       // 内核类型
     bool use_tma = true;                       // 使用TMA
     std::string optimization_level = "auto";   // 优化级别: "auto", "fast", "best"
     int max_registers = 255;                   // 最大寄存器数
     bool enable_shared_memory_opt = true;      // 共享内存优化
     bool enable_loop_unroll = true;            // 循环展开
     bool enable_memory_coalescing = true;      // 内存合并优化
+    int tile_size = 16;                        // 瓦片大小
+    bool enable_tensor_core = true;            // 启用Tensor Core
+    bool enable_tma = true;                    // 启用TMA
+    std::string hardware_spec = "";            // 硬件规格
+    std::vector<int> matrix_size = {0, 0, 0};  // 矩阵大小
 };
 
 // JIT统计信息
@@ -45,6 +52,7 @@ struct JITStatistics {
     double total_execution_time = 0.0;         // 总执行时间 (秒)
     size_t cache_size = 0;                     // 当前缓存大小 (字节)
     int active_kernels = 0;                    // 活跃kernel数量
+    size_t total_saved_compilation_time = 0;   // 总节省的编译时间 (毫秒)
     
     // 计算缓存命中率
     double GetCacheHitRate() const {
@@ -83,6 +91,10 @@ struct PerformanceProfile {
     bool used_tma = false;                     // 是否使用了TMA
     std::string kernel_name;                   // kernel名称
     std::string optimization_level;            // 使用的优化级别
+    double execution_time = 0.0;               // 执行时间
+    std::string kernel_type = "";              // 内核类型
+    double throughput = 0.0;                   // 吞吐量
+    std::vector<int> matrix_size = {0, 0, 0};  // 矩阵大小
     
     // 计算总时间
     double GetTotalTime() const {
@@ -111,6 +123,8 @@ struct HardwareSpec {
     bool supports_tensor_core = false;         // 是否支持Tensor Core
     bool supports_tma = false;                 // 是否支持TMA
     std::string gpu_name;                      // GPU名称
+    int multi_processor_count = 0;             // 多处理器数量
+    int shared_memory_per_block = 0;           // 每块共享内存
     
     // 获取计算能力字符串
     std::string GetComputeCapabilityString() const {

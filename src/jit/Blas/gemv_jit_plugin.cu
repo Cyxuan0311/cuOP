@@ -1,4 +1,5 @@
 #include "jit/Blas/gemv_jit_plugin.hpp"
+#include "jit/jit_compiler.hpp"
 #include "util/status_code.hpp"
 #include <glog/logging.h>
 #include <cuda_runtime.h>
@@ -6,6 +7,17 @@
 #include <sstream>
 
 namespace cu_op_mem {
+
+// 辅助函数：生成内核缓存键
+std::string GemvJITPlugin::GenerateKernelKey(const std::string& kernel_code, const JITConfig& config) {
+    std::string key = kernel_code;
+    key += "_" + std::to_string(config.block_size);
+    key += "_" + std::to_string(config.tile_size);
+    key += "_" + std::to_string(config.max_registers);
+    key += "_" + (config.enable_shared_memory_opt ? std::string("1") : std::string("0"));
+    key += "_" + config.optimization_level;
+    return key;
+}
 
 // ==================== GemvJITPlugin 实现 ====================
 
@@ -45,11 +57,12 @@ StatusCode GemvJITPlugin::Initialize() {
             compiler_ = std::make_unique<JITCompiler>();
         }
         
-        HardwareSpec hw_spec = GetHardwareSpec();
-        config_.hardware_spec = hw_spec;
+        HardwareSpec hw_spec = GetGemvHardwareSpec();
+        config_.hardware_spec = std::to_string(hw_spec.compute_capability_major) + "." + 
+                                std::to_string(hw_spec.compute_capability_minor);
         
         initialized_ = true;
-        VLOG(1) << "GemvJITPlugin initialized successfully";
+        LOG(INFO) << "GemvJITPlugin initialized successfully";
         return StatusCode::SUCCESS;
         
     } catch (const std::exception& e) {
@@ -70,12 +83,12 @@ StatusCode GemvJITPlugin::Compile(const JITConfig& config) {
         
         config_ = config;
         
-        if (!ValidateConfig(config_)) {
+        if (!ValidateGemvConfig(config_)) {
             last_error_ = "Invalid configuration";
             return StatusCode::INVALID_ARGUMENT;
         }
         
-        config_ = OptimizeConfig(config_);
+        config_ = OptimizeGemvConfig(config_);
         
         std::string kernel_code = GenerateKernelCode(config_);
         if (kernel_code.empty()) {
@@ -99,7 +112,7 @@ StatusCode GemvJITPlugin::Compile(const JITConfig& config) {
         total_compilation_time_ += std::chrono::duration<double>(end_time - start_time).count();
         
         compiled_ = true;
-        VLOG(1) << "GemvJITPlugin compiled successfully with kernel type: " << config_.kernel_type;
+        LOG(INFO) << "GemvJITPlugin compiled successfully with kernel type: " << config_.kernel_type;
         return StatusCode::SUCCESS;
         
     } catch (const std::exception& e) {
@@ -193,9 +206,9 @@ StatusCode GemvJITPlugin::Execute(const std::vector<Tensor<float>>& inputs,
         
         kernel_performance_[config_.kernel_type] = execution_time;
         
-        VLOG(2) << "GemvJITPlugin executed successfully: " 
-                << "time=" << execution_time << "s, "
-                << "throughput=" << last_profile_.throughput << " GFLOPS";
+        LOG(INFO) << "GemvJITPlugin executed successfully: " 
+                  << "time=" << execution_time << "s, "
+                  << "throughput=" << last_profile_.throughput << " GFLOPS";
         
         return StatusCode::SUCCESS;
         
@@ -221,7 +234,7 @@ void GemvJITPlugin::Optimize(const PerformanceProfile& profile) {
         
         if (optimal_kernel != config_.kernel_type) {
             config_.kernel_type = optimal_kernel;
-            VLOG(1) << "Auto-tuning: switching to kernel type: " << optimal_kernel;
+            LOG(INFO) << "Auto-tuning: switching to kernel type: " << optimal_kernel;
             Compile(config_);
         }
     }
@@ -285,7 +298,9 @@ void GemvJITPlugin::SetGemvParams(bool transA, float alpha, float beta) {
 }
 
 void GemvJITPlugin::SetWeight(const Tensor<float>& weight) {
-    weight_ = weight;
+    // 由于Tensor不支持拷贝，我们需要重新设计这个接口
+    // 暂时使用移动语义，但需要修改接口
+    weight_ = std::move(const_cast<Tensor<float>&>(weight));
 }
 
 bool GemvJITPlugin::SupportsOperator(const std::string& op_name) {
@@ -408,23 +423,24 @@ CUfunction GemvJITPlugin::GetCachedKernel(const std::string& key) {
     return (it != kernel_cache_.end()) ? it->second : nullptr;
 }
 
-PerformanceProfile GemvJITPlugin::MeasurePerformance(const std::vector<Tensor<float>>& inputs,
-                                                    const std::vector<Tensor<float>>& outputs) {
+PerformanceProfile GemvJITPlugin::MeasurePerformance(const CUfunction& kernel, const JITConfig& config) {
     PerformanceProfile profile;
     profile.execution_time = last_profile_.execution_time;
     profile.kernel_type = config_.kernel_type;
-    profile.matrix_size = {weight_.shape()[0], weight_.shape()[1], 1};
+    profile.matrix_size = {static_cast<int>(weight_.shape()[0]), 
+                          static_cast<int>(weight_.shape()[1]), 
+                          1};
     profile.throughput = last_profile_.throughput;
     return profile;
 }
 
-bool GemvJITPlugin::ValidateConfig(const JITConfig& config) const {
+bool GemvJITPlugin::ValidateGemvConfig(const JITConfig& config) const {
     return !config.kernel_type.empty() && 
            config.tile_size > 0 && 
            config.block_size > 0;
 }
 
-JITConfig GemvJITPlugin::OptimizeConfig(const JITConfig& config) const {
+JITConfig GemvJITPlugin::OptimizeGemvConfig(const JITConfig& config) const {
     JITConfig optimized = config;
     
     if (config.kernel_type == "optimized") {
@@ -434,7 +450,7 @@ JITConfig GemvJITPlugin::OptimizeConfig(const JITConfig& config) const {
     return optimized;
 }
 
-HardwareSpec GemvJITPlugin::GetHardwareSpec() const {
+HardwareSpec GemvJITPlugin::GetGemvHardwareSpec() const {
     HardwareSpec spec;
     
     cudaDeviceProp prop;

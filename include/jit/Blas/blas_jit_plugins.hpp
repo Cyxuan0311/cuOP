@@ -3,9 +3,15 @@
 // BLAS JIT插件统一入口
 // 包含所有BLAS相关的JIT插件实现
 
+#include "jit/ijit_plugin.hpp"
 #include "jit/Blas/gemm_jit_plugin.hpp"
 #include "jit/Blas/gemv_jit_plugin.hpp"
 #include "jit/Blas/trsm_jit_plugin.hpp"
+#include <unordered_map>
+#include <functional>
+#include <memory>
+#include <vector>
+#include <string>
 
 namespace cu_op_mem {
 

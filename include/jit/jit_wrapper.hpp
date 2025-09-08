@@ -3,14 +3,16 @@
 #include "jit_config.hpp"
 #include "ijit_plugin.hpp"
 #include "jit_compiler.hpp"
+#include "global_jit_manager.hpp"
+#include "data/tensor.hpp"
+#include "cuda_op/detail/cuBlas/gemm.hpp"
 #include <memory>
 #include <type_traits>
 #include <functional>
+#include <unordered_map>
+#include <mutex>
 
 namespace cu_op_mem {
-
-// 前向声明
-class GlobalJITManager;
 
 // 智能JIT包装器 - 核心组件
 template<typename OperatorType>
@@ -24,20 +26,14 @@ private:
     PerformanceProfile last_profile_;                 // 最后一次性能分析
     
 public:
-    // 构造函数 - 包装现有算子
-    explicit JITWrapper(const OperatorType& op) 
-        : original_operator_(op), jit_enabled_(false), auto_tuning_enabled_(false) {
+    // 构造函数 - 包装现有算子（移动语义）
+    explicit JITWrapper(OperatorType&& op) 
+        : original_operator_(std::move(op)), jit_enabled_(false), auto_tuning_enabled_(false) {
         InitializeJIT();
     }
     
-    // 拷贝构造函数
-    JITWrapper(const JITWrapper& other) 
-        : original_operator_(other.original_operator_), 
-          jit_config_(other.jit_config_),
-          jit_enabled_(other.jit_enabled_),
-          auto_tuning_enabled_(other.auto_tuning_enabled_) {
-        InitializeJIT();
-    }
+    // 删除拷贝构造函数（因为OperatorType可能不支持拷贝）
+    JITWrapper(const JITWrapper& other) = delete;
     
     // 移动构造函数
     JITWrapper(JITWrapper&& other) noexcept
@@ -51,17 +47,8 @@ public:
         other.auto_tuning_enabled_ = false;
     }
     
-    // 赋值操作符
-    JITWrapper& operator=(const JITWrapper& other) {
-        if (this != &other) {
-            original_operator_ = other.original_operator_;
-            jit_config_ = other.jit_config_;
-            jit_enabled_ = other.jit_enabled_;
-            auto_tuning_enabled_ = other.auto_tuning_enabled_;
-            InitializeJIT();
-        }
-        return *this;
-    }
+    // 删除拷贝赋值操作符（因为OperatorType可能不支持拷贝）
+    JITWrapper& operator=(const JITWrapper& other) = delete;
     
     JITWrapper& operator=(JITWrapper&& other) noexcept {
         if (this != &other) {
@@ -198,6 +185,7 @@ private:
     // 初始化JIT系统
     void InitializeJIT() {
         // 检查全局JIT是否启用
+        // 获取全局JIT管理器实例
         auto& global_manager = GlobalJITManager::Instance();
         if (!global_manager.GetGlobalConfig().enable_jit) {
             jit_enabled_ = false;
@@ -225,9 +213,8 @@ private:
         // 这里需要根据具体的算子类型返回对应的插件类型
         // 可以通过特化或类型特征来实现
         if constexpr (std::is_same_v<T, Gemm<float>>) return "gemm_jit";
-        if constexpr (std::is_same_v<T, Conv<float>>) return "conv_jit";
-        if constexpr (std::is_same_v<T, Pool<float>>) return "pool_jit";
-        return "unknown";
+        // 其他操作类型可以在这里添加
+        return "unknown_jit";
     }
     
     // 参数转换辅助函数 (需要根据具体算子实现)
@@ -247,39 +234,6 @@ private:
     }
 };
 
-// 全局JIT管理器
-class GlobalJITManager {
-public:
-    static GlobalJITManager& Instance();
-    
-    // 全局配置管理
-    void SetGlobalConfig(const GlobalJITConfig& config);
-    GlobalJITConfig GetGlobalConfig() const;
-    
-    // 算子配置管理
-    void SetOperatorConfig(const std::string& op_name, const JITConfig& config);
-    JITConfig GetOperatorConfig(const std::string& op_name) const;
-    
-    // 系统管理
-    StatusCode Initialize();
-    void Cleanup();
-    
-    // 统计信息
-    JITStatistics GetStatistics() const;
-    void ResetStatistics();
-    
-    // 缓存管理
-    void ClearAllCaches();
-    void SaveCacheToFile(const std::string& file_path);
-    void LoadCacheFromFile(const std::string& file_path);
-    
-private:
-    GlobalJITConfig global_config_;
-    std::unordered_map<std::string, JITConfig> operator_configs_;
-    JITStatistics global_statistics_;
-    mutable std::mutex config_mutex_;
-    mutable std::mutex stats_mutex_;
-};
 
 // 便捷函数：创建JIT包装器
 template<typename OperatorType>

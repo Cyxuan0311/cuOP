@@ -3,11 +3,12 @@
 
 #include "data/tensor.hpp"
 #include "util/status_code.hpp"
+#include "cuda_op/abstract/operator.hpp"
 
 namespace cu_op_mem {
 
 template <typename T>
-class GlobalMaxPool2D {
+class GlobalMaxPool2D : public Operator<T> {
     public:
         GlobalMaxPool2D() = default;
 

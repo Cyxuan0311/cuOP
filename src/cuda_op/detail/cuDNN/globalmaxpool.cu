@@ -1,34 +1,61 @@
-#include "cuda_op/detail/cuDNN/globalmaxpool2D.hpp"
+#include "cuda_op/detail/cuDNN/globalmaxpool.hpp"
 #include <cuda_runtime.h>
 #include <glog/logging.h>
 #include <limits>
 
 namespace cu_op_mem {
 
-template <typename T>
-__global__ void globalmaxpool2D_kernel(const T* input, T* output, int n) {
-    extern __shared__ T sdata[];
+// 为float类型创建独立的kernel函数
+__global__ void globalmaxpool2D_kernel_float(const float* input, float* output, int n) {
+    extern __shared__ float globalmaxpool_shared_mem_float[];
     unsigned int tid = threadIdx.x;
     unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
     unsigned int gridSize = gridDim.x * blockDim.x;
 
-    T my_max = std::numeric_limits<T>::lowest();
+    float my_max = -1e30f;  // 使用一个很小的值作为初始值
     while (i < n) {
         my_max = max(my_max, input[i]);
         i += gridSize;
     }
-    sdata[tid] = my_max;
+    globalmaxpool_shared_mem_float[tid] = my_max;
     __syncthreads();
 
     for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
         if (tid < s) {
-            sdata[tid] = max(sdata[tid], sdata[tid + s]);
+            globalmaxpool_shared_mem_float[tid] = max(globalmaxpool_shared_mem_float[tid], globalmaxpool_shared_mem_float[tid + s]);
         }
         __syncthreads();
     }
 
     if (tid == 0) {
-        output[blockIdx.x] = sdata[0];
+        output[blockIdx.x] = globalmaxpool_shared_mem_float[0];
+    }
+}
+
+// 为double类型创建独立的kernel函数
+__global__ void globalmaxpool2D_kernel_double(const double* input, double* output, int n) {
+    extern __shared__ double globalmaxpool_shared_mem_double[];
+    unsigned int tid = threadIdx.x;
+    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int gridSize = gridDim.x * blockDim.x;
+
+    double my_max = -1e30;  // 使用一个很小的值作为初始值
+    while (i < n) {
+        my_max = max(my_max, input[i]);
+        i += gridSize;
+    }
+    globalmaxpool_shared_mem_double[tid] = my_max;
+    __syncthreads();
+
+    for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            globalmaxpool_shared_mem_double[tid] = max(globalmaxpool_shared_mem_double[tid], globalmaxpool_shared_mem_double[tid + s]);
+        }
+        __syncthreads();
+    }
+
+    if (tid == 0) {
+        output[blockIdx.x] = globalmaxpool_shared_mem_double[0];
     }
 }
 
@@ -41,7 +68,16 @@ StatusCode GlobalMaxPool2D<T>::Forward(const Tensor<T>& input, Tensor<T>& output
         int input_width = input_shape[1];
         output.resize({1});
         int threads = 256;
-        globalmaxpool2D_kernel<T><<<1, threads>>>(input.data(), output.data(), input_height, input_width);
+        
+        // 根据类型调用相应的kernel函数
+        if constexpr (std::is_same_v<T, float>) {
+            globalmaxpool2D_kernel_float<<<1, threads>>>(input.data(), output.data(), input_height * input_width);
+        } else if constexpr (std::is_same_v<T, double>) {
+            globalmaxpool2D_kernel_double<<<1, threads>>>(input.data(), output.data(), input_height * input_width);
+        } else {
+            LOG(ERROR) << "GlobalMaxPool2D only supports float and double types.";
+            return StatusCode::UNSUPPORTED_OPERATION;
+        }
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) {
             LOG(ERROR) << "GlobalMaxPool2D kernel failed: " << cudaGetErrorString(err);
@@ -64,7 +100,16 @@ StatusCode GlobalMaxPool2D<T>::Forward(const Tensor<T>& input, Tensor<T>& output
             const T* in = input_ptr + i * H * W;
             T* out = output_ptr + i;
             int threads = 256;
-            globalmaxpool2D_kernel<T><<<1, threads>>>(in, out, H, W);
+            
+            // 根据类型调用相应的kernel函数
+            if constexpr (std::is_same_v<T, float>) {
+                globalmaxpool2D_kernel_float<<<1, threads>>>(in, out, H * W);
+            } else if constexpr (std::is_same_v<T, double>) {
+                globalmaxpool2D_kernel_double<<<1, threads>>>(in, out, H * W);
+            } else {
+                LOG(ERROR) << "GlobalMaxPool2D only supports float and double types.";
+                return StatusCode::UNSUPPORTED_OPERATION;
+            }
         }
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) {

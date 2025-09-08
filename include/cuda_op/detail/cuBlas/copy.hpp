@@ -13,11 +13,7 @@ class Copy : public Operator<T> {
 
         ~Copy();
 
-        StatusCode Forward(const Tensor<T>& x,Tensor<T>& y);
-
-        StatusCode Forward(const Tensor<T>& input,Tensor<T>& output) override {
-            return StatusCode::UNSUPPORTED_TYPE;
-        }
+        StatusCode Forward(const Tensor<T>& input,Tensor<T>& output) override;
 
 };
 

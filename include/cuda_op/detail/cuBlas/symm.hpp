@@ -9,7 +9,7 @@ template <typename T>
 class Symm : public Operator<T> {
     public:
         Symm(cublasSideMode_t side = CUBLAS_SIDE_LEFT,
-             cublasSideMode_t uplo = CUBLAS_FILL_MODE_UPPER,
+             cublasFillMode_t uplo = CUBLAS_FILL_MODE_UPPER,
              T alpha = 1, T beta = 0);
 
         ~Symm();

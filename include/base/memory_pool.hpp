@@ -25,6 +25,8 @@ struct MemoryBlock {
     std::chrono::steady_clock::time_point last_used;
     bool is_fragmented;
     
+    MemoryBlock() : ptr(nullptr), size(0), block_size(0), last_used(std::chrono::steady_clock::now()), is_fragmented(false) {}
+    
     MemoryBlock(void* p, std::size_t s, std::size_t bs) 
         : ptr(p), size(s), block_size(bs), last_used(std::chrono::steady_clock::now()), is_fragmented(false) {}
 };
@@ -40,6 +42,21 @@ struct MemoryStats {
     std::atomic<std::size_t> free_count{0};
     std::atomic<std::size_t> cache_hits{0};
     std::atomic<std::size_t> cache_misses{0};
+    
+    // 拷贝构造函数
+    MemoryStats(const MemoryStats& other) 
+        : total_allocated(other.total_allocated.load()),
+          total_freed(other.total_freed.load()),
+          peak_usage(other.peak_usage.load()),
+          current_usage(other.current_usage.load()),
+          fragmentation_bytes(other.fragmentation_bytes.load()),
+          allocation_count(other.allocation_count.load()),
+          free_count(other.free_count.load()),
+          cache_hits(other.cache_hits.load()),
+          cache_misses(other.cache_misses.load()) {}
+    
+    // 默认构造函数
+    MemoryStats() = default;
     
     void Reset() {
         total_allocated = 0;

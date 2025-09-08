@@ -1,6 +1,6 @@
 #pragma once
 #include "util/status_code.hpp"
-#include "tensor/tensor.hpp"
+#include "data/tensor.hpp"
 #include <vector>
 
 namespace cu_op_mem {

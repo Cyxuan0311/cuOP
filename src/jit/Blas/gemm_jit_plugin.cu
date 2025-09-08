@@ -1,4 +1,4 @@
-#include "jit/gemm_jit_plugin.hpp"
+#include "jit/Blas/gemm_jit_plugin.hpp"
 #include "util/status_code.hpp"
 #include <glog/logging.h>
 #include <cuda_runtime.h>
@@ -9,6 +9,17 @@
 #include <algorithm>
 
 namespace cu_op_mem {
+
+// 辅助函数：生成内核缓存键
+std::string GemmJITPlugin::GenerateKernelKey(const std::string& kernel_code, const JITConfig& config) {
+    std::string key = kernel_code;
+    key += "_" + std::to_string(config.block_size);
+    key += "_" + std::to_string(config.tile_size);
+    key += "_" + std::to_string(config.max_registers);
+    key += "_" + (config.enable_shared_memory_opt ? std::string("1") : std::string("0"));
+    key += "_" + config.optimization_level;
+    return key;
+}
 
 // ==================== GemmJITPlugin 实现 ====================
 
@@ -52,21 +63,22 @@ StatusCode GemmJITPlugin::Initialize() {
         
         // 获取硬件规格
         HardwareSpec hw_spec = GetHardwareSpec();
-        config_.hardware_spec = hw_spec;
+        config_.hardware_spec = std::to_string(hw_spec.compute_capability_major) + "." + 
+                                std::to_string(hw_spec.compute_capability_minor);
         
         // 根据硬件调整配置
         if (SupportsTensorCore()) {
             config_.enable_tensor_core = true;
-            VLOG(1) << "Tensor Core supported, enabling in config";
+            LOG(INFO) << "Tensor Core supported, enabling in config";
         }
         
         if (SupportsTMA()) {
             config_.enable_tma = true;
-            VLOG(1) << "TMA supported, enabling in config";
+            LOG(INFO) << "TMA supported, enabling in config";
         }
         
         initialized_ = true;
-        VLOG(1) << "GemmJITPlugin initialized successfully";
+        LOG(INFO) << "GemmJITPlugin initialized successfully";
         return StatusCode::SUCCESS;
         
     } catch (const std::exception& e) {
@@ -122,7 +134,7 @@ StatusCode GemmJITPlugin::Compile(const JITConfig& config) {
         total_compilation_time_ += std::chrono::duration<double>(end_time - start_time).count();
         
         compiled_ = true;
-        VLOG(1) << "GemmJITPlugin compiled successfully with kernel type: " << config_.kernel_type;
+        LOG(INFO) << "GemmJITPlugin compiled successfully with kernel type: " << config_.kernel_type;
         return StatusCode::SUCCESS;
         
     } catch (const std::exception& e) {
@@ -270,7 +282,7 @@ void GemmJITPlugin::Optimize(const PerformanceProfile& profile) {
         
         if (optimal_kernel != config_.kernel_type) {
             config_.kernel_type = optimal_kernel;
-            VLOG(1) << "Auto-tuning: switching to kernel type: " << optimal_kernel;
+            LOG(INFO) << "Auto-tuning: switching to kernel type: " << optimal_kernel;
             
             // 重新编译
             Compile(config_);
@@ -337,7 +349,9 @@ void GemmJITPlugin::SetGemmParams(bool transA, bool transB, float alpha, float b
 }
 
 void GemmJITPlugin::SetWeight(const Tensor<float>& weight) {
-    weight_ = weight;
+    // 由于Tensor不支持拷贝，我们需要重新设计这个接口
+    // 暂时使用移动语义，但需要修改接口
+    weight_ = std::move(const_cast<Tensor<float>&>(weight));
 }
 
 bool GemmJITPlugin::SupportsOperator(const std::string& op_name) {
@@ -637,7 +651,9 @@ PerformanceProfile GemmJITPlugin::MeasurePerformance(const std::vector<Tensor<fl
     PerformanceProfile profile;
     profile.execution_time = last_profile_.execution_time;
     profile.kernel_type = config_.kernel_type;
-    profile.matrix_size = {inputs[0].shape()[0], outputs[0].shape()[1], inputs[0].shape()[1]};
+    profile.matrix_size = {static_cast<int>(inputs[0].shape()[0]), 
+                          static_cast<int>(outputs[0].shape()[1]), 
+                          static_cast<int>(inputs[0].shape()[1])};
     profile.throughput = last_profile_.throughput;
     return profile;
 }
@@ -761,27 +777,32 @@ bool GemmKernelTemplate::ValidateConfig(const JITConfig& config) const {
 // 其他模板方法的实现与GemmJITPlugin中的相同
 std::string GemmKernelTemplate::GenerateBasicKernel(const JITConfig& config) {
     // 与GemmJITPlugin::GenerateBasicKernel相同
-    return GemmJITPlugin().GenerateBasicKernel(config);
+      GemmJITPlugin plugin;
+      return plugin.GenerateBasicKernel(config);
 }
 
 std::string GemmKernelTemplate::GenerateTiledKernel(const JITConfig& config) {
     // 与GemmJITPlugin::GenerateTiledKernel相同
-    return GemmJITPlugin().GenerateTiledKernel(config);
+      GemmJITPlugin plugin;
+      return plugin.GenerateTiledKernel(config);
 }
 
 std::string GemmKernelTemplate::GenerateWarpOptimizedKernel(const JITConfig& config) {
     // 与GemmJITPlugin::GenerateWarpOptimizedKernel相同
-    return GemmJITPlugin().GenerateWarpOptimizedKernel(config);
+      GemmJITPlugin plugin;
+      return plugin.GenerateWarpOptimizedKernel(config);
 }
 
 std::string GemmKernelTemplate::GenerateTensorCoreKernel(const JITConfig& config) {
     // 与GemmJITPlugin::GenerateTensorCoreKernel相同
-    return GemmJITPlugin().GenerateTensorCoreKernel(config);
+      GemmJITPlugin plugin;
+      return plugin.GenerateTensorCoreKernel(config);
 }
 
 std::string GemmKernelTemplate::GenerateBlockedKernel(const JITConfig& config) {
     // 与GemmJITPlugin::GenerateBlockedKernel相同
-    return GemmJITPlugin().GenerateBlockedKernel(config);
+      GemmJITPlugin plugin;
+      return plugin.GenerateBlockedKernel(config);
 }
 
 std::string GemmKernelTemplate::GenerateTMAKernel(const JITConfig& config) {

@@ -1,4 +1,7 @@
-#include "jit/jit_wrapper.hpp"
+#include "jit/global_jit_manager.hpp"
+#include "jit/jit_config.hpp"
+#include "jit/ijit_plugin.hpp"
+#include "jit/jit_compiler.hpp"
 #include "util/status_code.hpp"
 #include <glog/logging.h>
 #include <fstream>

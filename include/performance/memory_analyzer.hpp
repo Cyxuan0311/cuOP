@@ -7,6 +7,8 @@
 #include <mutex>
 #include <atomic>
 #include <chrono>
+#include <functional>
+#include <thread>
 #include <cuda_runtime.h>
 
 namespace cu_op_mem {
@@ -91,6 +93,7 @@ public:
     size_t GetPeakUsage() const;
     size_t GetAllocationCount() const;
     size_t GetFreeCount() const;
+    MemoryAnalysisReport GetMemoryStats() const;
     
     // 内存优化建议
     std::vector<std::string> GetOptimizationSuggestions();
@@ -132,7 +135,7 @@ private:
     std::atomic<bool> real_time_monitoring_;
     std::atomic<bool> memory_pool_integration_;
     std::mutex allocations_mutex_;
-    std::mutex statistics_mutex_;
+    mutable std::mutex statistics_mutex_;
     
     std::unordered_map<void*, std::unique_ptr<MemoryAllocation>> active_allocations_;
     std::vector<std::unique_ptr<MemoryAllocation>> allocation_history_;

@@ -3,6 +3,7 @@
 #include "jit_config.hpp"
 #include "jit_persistent_cache.hpp"
 #include <cuda_runtime.h>
+#include <cuda.h>
 #include <nvrtc.h>
 #include <memory>
 #include <string>
@@ -57,6 +58,10 @@ public:
     JITCompileResult CompileKernel(const std::string& kernel_code,
                                   const std::string& kernel_name,
                                   const std::vector<std::string>& options = {});
+    
+    // 从PTX代码加载内核
+    JITCompileResult LoadKernelFromPTX(const std::string& ptx_code,
+                                      const std::string& kernel_name);
     
     // 缓存管理
     void CacheKernel(const std::string& key, const CUfunction& kernel);

@@ -203,7 +203,8 @@ std::vector<HotspotResult> HotspotAnalyzer::AnalyzeHotspots() {
         result.std_deviation = std::sqrt(variance / times.size());
         
         // 识别瓶颈类型
-        result.bottleneck_type = AnalyzeBottleneckType(*completed_calls_[0]); // 简化实现
+        BottleneckType bt = AnalyzeBottleneckType(*completed_calls_[0]);
+        result.bottleneck_type = std::to_string(static_cast<int>(bt)); // 简化实现
         
         // 生成优化建议
         result.optimization_suggestion = GenerateOptimizationSuggestion(result);
@@ -267,7 +268,7 @@ std::vector<std::string> HotspotAnalyzer::GetBottleneckFunctions(BottleneckType 
     std::vector<std::string> functions;
     
     for (const auto& hotspot : hotspots) {
-        if (hotspot.bottleneck_type == type) {
+        if (hotspot.bottleneck_type == std::to_string(static_cast<int>(type))) {
             functions.push_back(hotspot.function_name);
         }
     }
@@ -308,7 +309,8 @@ std::string HotspotAnalyzer::GenerateOptimizationReport() {
     
     std::ostringstream report;
     report << "=== cuOP Hotspot Analysis Report ===\n";
-    report << "Analysis Time: " << std::put_time(std::localtime(&analysis_start_time_), "%Y-%m-%d %H:%M:%S") << "\n";
+    auto time_t_val = std::chrono::system_clock::to_time_t(analysis_start_time_);
+    report << "Analysis Time: " << std::put_time(std::localtime(&time_t_val), "%Y-%m-%d %H:%M:%S") << "\n";
     report << "Total Function Calls: " << total_function_calls_ << "\n";
     report << "Total Analysis Time: " << std::fixed << std::setprecision(2) << total_analysis_time_ << " ms\n\n";
     
@@ -323,19 +325,19 @@ std::string HotspotAnalyzer::GenerateOptimizationReport() {
         report << "   Call Count: " << hotspot.call_count << "\n";
         report << "   Avg Time: " << std::fixed << std::setprecision(2) << hotspot.avg_time << " ms\n";
         report << "   Priority Score: " << std::fixed << std::setprecision(2) << hotspot.priority_score << "\n";
-        report << "   Bottleneck Type: " << static_cast<int>(hotspot.bottleneck_type) << "\n";
+        report << "   Bottleneck Type: " << hotspot.bottleneck_type << "\n";
         report << "   Suggestion: " << hotspot.optimization_suggestion << "\n\n";
     }
     
     // 瓶颈分析
     report << "=== Bottleneck Analysis ===\n";
-    std::unordered_map<BottleneckType, size_t> bottleneck_counts;
+    std::unordered_map<std::string, size_t> bottleneck_counts;
     for (const auto& hotspot : hotspots) {
         bottleneck_counts[hotspot.bottleneck_type]++;
     }
     
     for (const auto& pair : bottleneck_counts) {
-        report << "Bottleneck Type " << static_cast<int>(pair.first) << ": " << pair.second << " functions\n";
+        report << "Bottleneck Type " << pair.first << ": " << pair.second << " functions\n";
     }
     
     // 优化建议
@@ -381,7 +383,7 @@ void HotspotAnalyzer::ExportToCSV(const std::string& filename) {
              << hotspot.max_time << ","
              << hotspot.std_deviation << ","
              << hotspot.priority_score << ","
-             << static_cast<int>(hotspot.bottleneck_type) << ","
+             << hotspot.bottleneck_type << ","
              << "\"" << hotspot.optimization_suggestion << "\"\n";
     }
     
@@ -395,8 +397,8 @@ void HotspotAnalyzer::ExportToJSON(const std::string& filename) {
     Json::Value root;
     root["analysis_time"] = std::chrono::duration_cast<std::chrono::seconds>(
         analysis_start_time_.time_since_epoch()).count();
-    root["total_function_calls"] = total_function_calls_;
-    root["total_analysis_time"] = total_analysis_time_;
+    root["total_function_calls"] = total_function_calls_.load();
+    root["total_analysis_time"] = total_analysis_time_.load();
     
     // 热点数据
     Json::Value hotspots_json(Json::arrayValue);
@@ -413,7 +415,7 @@ void HotspotAnalyzer::ExportToJSON(const std::string& filename) {
         hotspot_json["max_time"] = hotspot.max_time;
         hotspot_json["std_deviation"] = hotspot.std_deviation;
         hotspot_json["priority_score"] = hotspot.priority_score;
-        hotspot_json["bottleneck_type"] = static_cast<int>(hotspot.bottleneck_type);
+        hotspot_json["bottleneck_type"] = hotspot.bottleneck_type;
         hotspot_json["optimization_suggestion"] = hotspot.optimization_suggestion;
         hotspots_json.append(hotspot_json);
     }

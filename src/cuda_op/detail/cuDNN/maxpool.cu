@@ -1,4 +1,4 @@
-#include "cuda_op/detail/cuDNN/maxpool2D.hpp"
+#include "cuda_op/detail/cuDNN/maxpool.hpp"
 #include <cuda_runtime.h>
 #include <glog/logging.h>
 

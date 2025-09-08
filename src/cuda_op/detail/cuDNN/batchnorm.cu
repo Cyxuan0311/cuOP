@@ -5,38 +5,38 @@
 
 namespace cu_op_mem {
 
-template <typename T>
-__global__ void batchnorm_forward_shared_kernel(const T* input, T* output,
-                                                const T* gamma, const T* beta,
-                                                T* running_mean, T* running_var,
-                                                int N, int C, int HxW, T eps) {
+// 为float类型创建独立的kernel函数
+__global__ void batchnorm_forward_shared_kernel_float(const float* input, float* output,
+                                                      const float* gamma, const float* beta,
+                                                      float* running_mean, float* running_var,
+                                                      int N, int C, int HxW, float eps) {
     int c = blockIdx.x;
     int tid = threadIdx.x;
     int num = N * HxW;
-    extern __shared__ T sdata[];
+    extern __shared__ float batchnorm_shared_mem_float[];
 
-    T sum = 0, sqsum = 0;
+    float sum = 0, sqsum = 0;
     for (int i = tid; i < num; i += blockDim.x) {
         int n = i / HxW;
         int hw = i % HxW;
-        T v = input[(n * C + c) * HxW + hw];
+        float v = input[(n * C + c) * HxW + hw];
         sum += v;
         sqsum += v * v;
     }
-    sdata[tid] = sum;
-    sdata[blockDim.x + tid] = sqsum;
+    batchnorm_shared_mem_float[tid] = sum;
+    batchnorm_shared_mem_float[blockDim.x + tid] = sqsum;
     __syncthreads();
 
     for (int s = blockDim.x / 2; s > 0; s >>= 1) {
         if (tid < s) {
-            sdata[tid] += sdata[tid + s];
-            sdata[blockDim.x + tid] += sdata[blockDim.x + tid + s];
+            batchnorm_shared_mem_float[tid] += batchnorm_shared_mem_float[tid + s];
+            batchnorm_shared_mem_float[blockDim.x + tid] += batchnorm_shared_mem_float[blockDim.x + tid + s];
         }
         __syncthreads();
     }
 
-    T mean = sdata[0] / num;
-    T var = sdata[blockDim.x] / num - mean * mean;
+    float mean = batchnorm_shared_mem_float[0] / num;
+    float var = batchnorm_shared_mem_float[blockDim.x] / num - mean * mean;
     if (tid == 0) {
         running_mean[c] = mean;
         running_var[c] = var;
@@ -47,8 +47,56 @@ __global__ void batchnorm_forward_shared_kernel(const T* input, T* output,
         int n = i / HxW;
         int hw = i % HxW;
         int idx = (n * C + c) * HxW + hw;
-        T v = input[idx];
-        T norm = (v - mean) / sqrt(var + eps);
+        float v = input[idx];
+        float norm = (v - mean) / sqrt(var + eps);
+        output[idx] = norm * gamma[c] + beta[c];
+    }
+}
+
+// 为double类型创建独立的kernel函数
+__global__ void batchnorm_forward_shared_kernel_double(const double* input, double* output,
+                                                       const double* gamma, const double* beta,
+                                                       double* running_mean, double* running_var,
+                                                       int N, int C, int HxW, double eps) {
+    int c = blockIdx.x;
+    int tid = threadIdx.x;
+    int num = N * HxW;
+    extern __shared__ double batchnorm_shared_mem_double[];
+
+    double sum = 0, sqsum = 0;
+    for (int i = tid; i < num; i += blockDim.x) {
+        int n = i / HxW;
+        int hw = i % HxW;
+        double v = input[(n * C + c) * HxW + hw];
+        sum += v;
+        sqsum += v * v;
+    }
+    batchnorm_shared_mem_double[tid] = sum;
+    batchnorm_shared_mem_double[blockDim.x + tid] = sqsum;
+    __syncthreads();
+
+    for (int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            batchnorm_shared_mem_double[tid] += batchnorm_shared_mem_double[tid + s];
+            batchnorm_shared_mem_double[blockDim.x + tid] += batchnorm_shared_mem_double[blockDim.x + tid + s];
+        }
+        __syncthreads();
+    }
+
+    double mean = batchnorm_shared_mem_double[0] / num;
+    double var = batchnorm_shared_mem_double[blockDim.x] / num - mean * mean;
+    if (tid == 0) {
+        running_mean[c] = mean;
+        running_var[c] = var;
+    }
+    __syncthreads();
+
+    for (int i = tid; i < num; i += blockDim.x) {
+        int n = i / HxW;
+        int hw = i % HxW;
+        int idx = (n * C + c) * HxW + hw;
+        double v = input[idx];
+        double norm = (v - mean) / sqrt(var + eps);
         output[idx] = norm * gamma[c] + beta[c];
     }
 }
@@ -84,10 +132,22 @@ StatusCode BatchNorm<T>::Forward(const Tensor<T>& input, Tensor<T>& output,
     int threads = 256;
     int blocks = C;
     size_t shared_mem = threads * 2 * sizeof(T);
-    batchnorm_forward_shared_kernel<T><<<blocks, threads, shared_mem>>>(
-        input.data(), output.data(),
-        gamma.data(), beta.data(), running_mean.data(), running_var.data(),
-        N, C, HxW, eps);
+    
+    // 根据类型调用相应的kernel函数
+    if constexpr (std::is_same_v<T, float>) {
+        batchnorm_forward_shared_kernel_float<<<blocks, threads, shared_mem>>>(
+            input.data(), output.data(),
+            gamma.data(), beta.data(), running_mean.data(), running_var.data(),
+            N, C, HxW, eps);
+    } else if constexpr (std::is_same_v<T, double>) {
+        batchnorm_forward_shared_kernel_double<<<blocks, threads, shared_mem>>>(
+            input.data(), output.data(),
+            gamma.data(), beta.data(), running_mean.data(), running_var.data(),
+            N, C, HxW, eps);
+    } else {
+        LOG(ERROR) << "BatchNorm only supports float and double types.";
+        return StatusCode::UNSUPPORTED_OPERATION;
+    }
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
         LOG(ERROR) << "BatchNorm kernel failed: " << cudaGetErrorString(err);

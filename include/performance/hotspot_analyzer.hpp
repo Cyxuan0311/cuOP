@@ -7,8 +7,10 @@
 #include <memory>
 #include <mutex>
 #include <atomic>
+#include <functional>
+#include <thread>
 #include <cuda_runtime.h>
-#include <nvToolsExt.h>
+#include <nvtx3/nvToolsExt.h>
 
 namespace cu_op_mem {
 
@@ -163,7 +165,6 @@ private:
     BottleneckType AnalyzeBottleneckType(const FunctionCall& call);
     std::string GenerateOptimizationSuggestion(const HotspotResult& result);
     double CalculatePriorityScore(const HotspotResult& result);
-    void AnalyzePerformanceTrends();
     
     // 成员变量
     std::atomic<bool> analysis_enabled_;

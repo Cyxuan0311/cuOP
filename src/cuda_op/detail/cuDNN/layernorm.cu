@@ -5,44 +5,86 @@
 
 namespace cu_op_mem {
 
-template <typename T>
-__global__ void layernorm_forward_parallel_kernel(const T* input, T* output,
-                                                 const T* gamma, const T* beta,
-                                                 int batch, int norm_size, int norm_stride, T eps) {
+// 为float类型创建独立的kernel函数
+__global__ void layernorm_forward_parallel_kernel_float(const float* input, float* output,
+                                                        const float* gamma, const float* beta,
+                                                        int batch, int norm_size, int norm_stride, float eps) {
     int row = blockIdx.x;
     int tid = threadIdx.x;
     if (row >= batch) return;
-    const T* in_ptr = input + row * norm_stride;
-    T* out_ptr = output + row * norm_stride;
-    extern __shared__ T sdata[]; // sdata[0:blockDim.x] for sum, [blockDim.x:2*blockDim.x] for sqsum
+    const float* in_ptr = input + row * norm_stride;
+    float* out_ptr = output + row * norm_stride;
+    extern __shared__ float layernorm_shared_mem_float[]; // layernorm_shared_mem_float[0:blockDim.x] for sum, [blockDim.x:2*blockDim.x] for sqsum
 
     // 1. 每个线程处理部分元素
-    T sum = 0, sqsum = 0;
+    float sum = 0, sqsum = 0;
     for (int i = tid; i < norm_size; i += blockDim.x) {
-        T v = in_ptr[i];
+        float v = in_ptr[i];
         sum += v;
         sqsum += v * v;
     }
-    sdata[tid] = sum;
-    sdata[blockDim.x + tid] = sqsum;
+    layernorm_shared_mem_float[tid] = sum;
+    layernorm_shared_mem_float[blockDim.x + tid] = sqsum;
     __syncthreads();
 
     // 2. block内归约
     for (int s = blockDim.x / 2; s > 0; s >>= 1) {
         if (tid < s) {
-            sdata[tid] += sdata[tid + s];
-            sdata[blockDim.x + tid] += sdata[blockDim.x + tid + s];
+            layernorm_shared_mem_float[tid] += layernorm_shared_mem_float[tid + s];
+            layernorm_shared_mem_float[blockDim.x + tid] += layernorm_shared_mem_float[blockDim.x + tid + s];
         }
         __syncthreads();
     }
-    T mean = sdata[0] / norm_size;
-    T var = sdata[blockDim.x] / norm_size - mean * mean;
+    float mean = layernorm_shared_mem_float[0] / norm_size;
+    float var = layernorm_shared_mem_float[blockDim.x] / norm_size - mean * mean;
     __syncthreads();
 
     // 3. 并行归一化写回
     for (int i = tid; i < norm_size; i += blockDim.x) {
-        T v = in_ptr[i];
-        T norm = (v - mean) / sqrt(var + eps);
+        float v = in_ptr[i];
+        float norm = (v - mean) / sqrt(var + eps);
+        out_ptr[i] = norm * gamma[i] + beta[i];
+    }
+}
+
+// 为double类型创建独立的kernel函数
+__global__ void layernorm_forward_parallel_kernel_double(const double* input, double* output,
+                                                         const double* gamma, const double* beta,
+                                                         int batch, int norm_size, int norm_stride, double eps) {
+    int row = blockIdx.x;
+    int tid = threadIdx.x;
+    if (row >= batch) return;
+    const double* in_ptr = input + row * norm_stride;
+    double* out_ptr = output + row * norm_stride;
+    extern __shared__ double layernorm_shared_mem_double[]; // layernorm_shared_mem_double[0:blockDim.x] for sum, [blockDim.x:2*blockDim.x] for sqsum
+
+    // 1. 每个线程处理部分元素
+    double sum = 0, sqsum = 0;
+    for (int i = tid; i < norm_size; i += blockDim.x) {
+        double v = in_ptr[i];
+        sum += v;
+        sqsum += v * v;
+    }
+    layernorm_shared_mem_double[tid] = sum;
+    layernorm_shared_mem_double[blockDim.x + tid] = sqsum;
+    __syncthreads();
+
+    // 2. block内归约
+    for (int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            layernorm_shared_mem_double[tid] += layernorm_shared_mem_double[tid + s];
+            layernorm_shared_mem_double[blockDim.x + tid] += layernorm_shared_mem_double[blockDim.x + tid + s];
+        }
+        __syncthreads();
+    }
+    double mean = layernorm_shared_mem_double[0] / norm_size;
+    double var = layernorm_shared_mem_double[blockDim.x] / norm_size - mean * mean;
+    __syncthreads();
+
+    // 3. 并行归一化写回
+    for (int i = tid; i < norm_size; i += blockDim.x) {
+        double v = in_ptr[i];
+        double norm = (v - mean) / sqrt(var + eps);
         out_ptr[i] = norm * gamma[i] + beta[i];
     }
 }
@@ -69,9 +111,20 @@ StatusCode LayerNorm<T>::Forward(const Tensor<T>& input, Tensor<T>& output,
     int threads = 256;
     int blocks = batch;
     size_t shared_mem = threads * 2 * sizeof(T);
-    layernorm_forward_parallel_kernel<T><<<blocks, threads, shared_mem>>>(
-        input.data(), output.data(),
-        gamma.data(), beta.data(), batch, norm_size, norm_stride, eps);
+    
+    // 根据类型调用相应的kernel函数
+    if constexpr (std::is_same_v<T, float>) {
+        layernorm_forward_parallel_kernel_float<<<blocks, threads, shared_mem>>>(
+            input.data(), output.data(),
+            gamma.data(), beta.data(), batch, norm_size, norm_stride, eps);
+    } else if constexpr (std::is_same_v<T, double>) {
+        layernorm_forward_parallel_kernel_double<<<blocks, threads, shared_mem>>>(
+            input.data(), output.data(),
+            gamma.data(), beta.data(), batch, norm_size, norm_stride, eps);
+    } else {
+        LOG(ERROR) << "LayerNorm only supports float and double types.";
+        return StatusCode::UNSUPPORTED_OPERATION;
+    }
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
         LOG(ERROR) << "LayerNorm kernel failed: " << cudaGetErrorString(err);

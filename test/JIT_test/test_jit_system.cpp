@@ -13,7 +13,7 @@ using namespace cu_op_mem;
 
 // 性能测试函数
 template<typename T>
-double MeasureExecutionTime(T& func, int iterations = 100) {
+double MeasureExecutionTime(T&& func, int iterations = 100) {
     auto start = std::chrono::high_resolution_clock::now();
     
     for (int i = 0; i < iterations; ++i) {
@@ -76,14 +76,14 @@ int main() {
         
         // 创建测试数据
         int M = 1024, N = 1024, K = 1024;
-        Tensor<float> A({M, K});
-        Tensor<float> B({K, N});
-        Tensor<float> C({M, N});
+        Tensor<float> A({static_cast<size_t>(M), static_cast<size_t>(K)});
+        Tensor<float> B({static_cast<size_t>(K), static_cast<size_t>(N)});
+        Tensor<float> C({static_cast<size_t>(M), static_cast<size_t>(N)});
         
         // 初始化数据
-        A.Fill(1.0f);
-        B.Fill(1.0f);
-        C.Zero();
+        A.fill(1.0f);
+        B.fill(1.0f);
+        C.zero();
         
         std::cout << "   矩阵大小: " << M << "x" << K << " * " << K << "x" << N << " = " << M << "x" << N << std::endl;
         
@@ -96,7 +96,7 @@ int main() {
         std::cout << "\n3. 创建JIT包装器..." << std::endl;
         
         // 创建JIT包装器
-        JITWrapper<Gemm<float>> jit_gemm(original_gemm);
+        JITWrapper<Gemm<float>> jit_gemm(std::move(original_gemm));
         
         // 配置JIT
         jit_gemm.SetJITConfig(gemm_config);
@@ -137,7 +137,7 @@ int main() {
         // 测试JIT算子性能
         std::cout << "   测试JIT算子 (" << test_iterations << " 次)..." << std::endl;
         double jit_time = MeasureExecutionTime([&]() {
-            jit_gemm.Forward(A, C);
+            jit_gemm(A, C);
         }, test_iterations);
         
         std::cout << "\n6. 性能结果:" << std::endl;

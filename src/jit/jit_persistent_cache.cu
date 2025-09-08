@@ -349,7 +349,7 @@ void JITPersistentCache::ValidateCacheIntegrity() {
 }
 
 PersistentCacheStats JITPersistentCache::GetStats() const {
-    return stats_;
+    return std::move(const_cast<PersistentCacheStats&>(stats_));
 }
 
 void JITPersistentCache::ResetStats() {
@@ -469,7 +469,7 @@ bool JITPersistentCache::SaveMetadata(const std::string& cache_key, const CacheM
     }
 }
 
-bool JITPersistentCache::LoadMetadata(const std::string& cache_key, CacheMetadata& metadata) {
+bool JITPersistentCache::LoadMetadata(const std::string& cache_key, CacheMetadata& metadata) const {
     try {
         std::string filepath = GenerateMetadataFilePath(cache_key);
         std::ifstream file(filepath, std::ios::binary);
@@ -708,6 +708,18 @@ bool JITPersistentCache::VerifyChecksum(const std::string& data, const std::stri
     return actual_checksum == expected_checksum;
 }
 
+// 缺失的方法实现
+bool JITPersistentCache::IsCompatibleWithCurrentEnvironment() const {
+    // 检查当前环境是否与缓存兼容
+    // 这里简化实现，实际应该检查CUDA版本、计算能力等
+    return true;
+}
+
+void JITPersistentCache::SetCachePolicy(const CachePolicy& policy) {
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    policy_ = policy;
+}
+
 // ==================== GlobalPersistentCacheManager 实现 ====================
 
 GlobalPersistentCacheManager& GlobalPersistentCacheManager::Instance() {
@@ -785,7 +797,7 @@ bool GlobalPersistentCacheManager::IsKernelCached(const std::string& cache_key) 
 
 PersistentCacheStats GlobalPersistentCacheManager::GetStats() const {
     if (!initialized_ || !cache_manager_) {
-        return PersistentCacheStats{};
+        return PersistentCacheStats();
     }
     
     return cache_manager_->GetStats();
@@ -815,6 +827,14 @@ void GlobalPersistentCacheManager::ValidateCacheIntegrity() {
     if (initialized_ && cache_manager_) {
         cache_manager_->ValidateCacheIntegrity();
     }
+}
+
+CacheMetadata GlobalPersistentCacheManager::GetKernelMetadata(const std::string& cache_key) const {
+    if (!initialized_ || !cache_manager_) {
+        return CacheMetadata{};
+    }
+    
+    return cache_manager_->GetKernelMetadata(cache_key);
 }
 
 } // namespace cu_op_mem 

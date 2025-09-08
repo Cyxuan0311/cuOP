@@ -8,9 +8,10 @@
 #include <mutex>
 #include <atomic>
 #include <thread>
+#include <functional>
 #include <fstream>
 #include <cuda_runtime.h>
-#include <nvToolsExt.h>
+#include <nvtx3/nvToolsExt.h>
 
 namespace cu_op_mem {
 
@@ -196,9 +197,9 @@ private:
     // 成员变量
     std::atomic<bool> monitoring_enabled_;
     std::atomic<bool> real_time_monitoring_;
-    std::mutex events_mutex_;
-    std::mutex memory_mutex_;
-    std::mutex analysis_mutex_;
+    mutable std::mutex events_mutex_;
+    mutable std::mutex memory_mutex_;
+    mutable std::mutex analysis_mutex_;
     
     std::unordered_map<std::string, std::unique_ptr<PerformanceEvent>> active_events_;
     std::vector<std::unique_ptr<PerformanceEvent>> completed_events_;
@@ -251,8 +252,8 @@ private:
 #define CUOP_MEM_FREE(size) \
     PerformanceMonitor::Instance().RecordMemoryFree(size)
 
-// 自动调优宏
-#define CUOP_AUTO_TUNE(op_name, param_ranges, benchmark_func) \
+// 自动调优宏 - 使用AutoTuner类
+#define CUOP_AUTO_TUNE_PERF(op_name, param_ranges, benchmark_func) \
     PerformanceMonitor::Instance().AutoTune(op_name, param_ranges, benchmark_func)
 
 } // namespace cu_op_mem

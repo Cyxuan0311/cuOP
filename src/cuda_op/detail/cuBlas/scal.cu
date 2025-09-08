@@ -17,18 +17,21 @@ template <typename T>
 Scal<T>::Scal(T alpha) : alpha_(alpha) {}
 
 template <typename T>
+Scal<T>::~Scal() = default;
+
+template <typename T>
 void Scal<T>::SetAlpha(T alpha) {
     alpha_ = alpha;
 }
 
 template <typename T>
 StatusCode Scal<T>::Forward(Tensor<T>& x) {
-    int n = static_cast<int>(n.numel());
+    int n = static_cast<int>(x.numel());
     T* d_x = x.data();
 
     int threads = 256;
     int blocks = (n + threads - 1) / threads;
-    scal_kernel<T<<<blocks,threads>>>(n,alpha_,d_x);
+    scal_kernel<T><<<blocks,threads>>>(n,alpha_,d_x);
 
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {

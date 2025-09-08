@@ -8,7 +8,7 @@ namespace cu_op_mem {
 template <typename T>
 class MaxPool2D : public Operator<T> {
    public:
-    MaxPool2D(int pool_height, int pool_width int stride_height = 1, int stride_width = 1)
+    MaxPool2D(int pool_height, int pool_width, int stride_height = 1, int stride_width = 1)
         : pool_height_(pool_height),
           pool_width_(pool_width),
           stride_height_(stride_height),

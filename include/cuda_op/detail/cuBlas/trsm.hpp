@@ -12,11 +12,7 @@ class Trsm : public Operator<T> {
 
         ~Trsm();
 
-        StatusCode Forward(const Tensor<T>& A,Tensor<T>& B);
-
-        StatusCode Forward(const Tensor<T>& input,Tensor<T>& output) override {
-            return StatusCode::UNSUPPORTED_TYPE;
-        }
+        StatusCode Forward(const Tensor<T>& input,Tensor<T>& output) override;
 
         void SetAlpha(T alpha);
     private:

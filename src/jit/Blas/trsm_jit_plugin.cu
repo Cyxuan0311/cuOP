@@ -287,11 +287,7 @@ std::string TrsmJITPlugin::GetLastError() const {
 void TrsmJITPlugin::Cleanup() {
     if (compiled_) {
         // 清理内核缓存
-        for (auto& pair : kernel_cache_) {
-            if (pair.second) {
-                cuModuleUnload(pair.second);
-            }
-        }
+        // CUfunction不需要手动unload，它们会随着其父模块自动释放
         kernel_cache_.clear();
         kernel_names_.clear();
         compiled_ = false;

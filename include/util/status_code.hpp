@@ -35,6 +35,8 @@ enum class StatusCode {
     TIMEOUT = 1003,                        // 操作超时
     INTERRUPTED = 1004,                    // 操作被中断
     RESOURCE_UNAVAILABLE = 1005,           // 资源不可用
+    FILE_NOT_FOUND = 1006,                 // 文件未找到
+    PERMISSION_DENIED = 1007,              // 权限被拒绝
     
     // ==================== CUDA相关错误 (2000-2999) ====================
     CUDA_ERROR = 2000,                     // CUDA错误
@@ -48,6 +50,10 @@ enum class StatusCode {
     CUDA_CONTEXT_ERROR = 2008,             // CUDA上下文错误
     CUDA_STREAM_ERROR = 2009,              // CUDA流错误
     CUDA_EVENT_ERROR = 2010,               // CUDA事件错误
+    CUDA_INVALID_DEVICE = 2011,            // CUDA无效设备
+    CUDA_INVALID_VALUE = 2012,             // CUDA无效值
+    CUDA_OUT_OF_MEMORY = 2013,             // CUDA内存不足
+    CUDA_LAUNCH_FAILED = 2014,             // CUDA启动失败
     
     // ==================== 内存相关错误 (3000-3999) ====================
     MEMORY_ERROR = 3000,                   // 内存错误
@@ -57,6 +63,7 @@ enum class StatusCode {
     MEMORY_COPY_FAILED = 3004,             // 内存拷贝失败
     MEMORY_ALIGNMENT_ERROR = 3005,         // 内存对齐错误
     MEMORY_POOL_ERROR = 3006,              // 内存池错误
+    MEMORY_FREE_FAILED = 3007,             // 内存释放失败
     
     // ==================== 验证错误 (4000-4999) ====================
     VALIDATION_ERROR = 4000,               // 验证错误
@@ -67,6 +74,10 @@ enum class StatusCode {
     INVALID_DIMENSION = 4005,              // 无效维度
     INVALID_TYPE = 4006,                   // 无效类型
     INVALID_OPERATION = 4007,              // 无效操作
+    INVALID_INPUT = 4008,                  // 无效输入
+    INVALID_OUTPUT = 4009,                 // 无效输出
+    INVALID_DIMENSIONS = 4010,             // 无效维度
+    INVALID_DATA_TYPE = 4011,              // 无效数据类型
     
     // ==================== 编译错误 (5000-5999) ====================
     COMPILATION_ERROR = 5000,              // 编译错误
@@ -76,6 +87,7 @@ enum class StatusCode {
     COMPILATION_INVALID_OPTIONS = 5004,    // 无效的编译选项
     COMPILATION_LINKING_ERROR = 5005,      // 链接错误
     COMPILATION_OPTIMIZATION_ERROR = 5006, // 优化错误
+    JIT_COMPILATION_FAILED = 5007,         // JIT编译失败
     
     // ==================== 执行错误 (6000-6999) ====================
     EXECUTION_ERROR = 6000,                // 执行错误
@@ -84,6 +96,7 @@ enum class StatusCode {
     EXECUTION_INTERRUPTED = 6003,          // 执行被中断
     EXECUTION_INVALID_KERNEL = 6004,       // 无效的内核
     EXECUTION_KERNEL_NOT_FOUND = 6005,     // 内核未找到
+    KERNEL_LAUNCH_FAILED = 6006,           // 内核启动失败
     
     // ==================== JIT系统错误 (7000-7999) ====================
     JIT_ERROR = 7000,                      // JIT系统错误
@@ -94,6 +107,7 @@ enum class StatusCode {
     JIT_EXECUTION_ERROR = 7005,            // JIT执行错误
     JIT_PLUGIN_ERROR = 7006,               // JIT插件错误
     JIT_TEMPLATE_ERROR = 7007,             // JIT模板错误
+    JIT_CACHE_ERROR = 7008,                // JIT缓存错误
     
     // ==================== 缓存相关错误 (8000-8999) ====================
     CACHE_ERROR = 8000,                    // 缓存错误
@@ -104,6 +118,7 @@ enum class StatusCode {
     CACHE_SERIALIZATION_ERROR = 8005,      // 缓存序列化错误
     CACHE_DESERIALIZATION_ERROR = 8006,    // 缓存反序列化错误
     CACHE_VERSION_MISMATCH = 8007,         // 缓存版本不匹配
+    CACHE_MISS = 8008,                     // 缓存未命中
     
     // ==================== 插件相关错误 (9000-9999) ====================
     PLUGIN_ERROR = 9000,                   // 插件错误
@@ -143,6 +158,93 @@ enum class StatusCode {
     KERNEL_NOT_FOUND = EXECUTION_KERNEL_NOT_FOUND,    // 兼容旧版本
     NOT_COMPILED = JIT_NOT_COMPILED                   // 兼容旧版本
 };
+
+// 全局GetErrorCategory函数 - 直接实现避免循环依赖
+inline ErrorCategory GetErrorCategory(StatusCode code) {
+    switch (code) {
+        case StatusCode::SUCCESS: return ErrorCategory::SUCCESS;
+        case StatusCode::CUDA_ERROR:
+        case StatusCode::CUDA_DRIVER_ERROR:
+        case StatusCode::CUDA_RUNTIME_ERROR:
+        case StatusCode::CUDA_MEMORY_ERROR:
+        case StatusCode::CUDA_KERNEL_ERROR:
+        case StatusCode::CUDA_LAUNCH_ERROR:
+        case StatusCode::CUDA_SYNC_ERROR:
+        case StatusCode::CUDA_DEVICE_ERROR:
+        case StatusCode::CUDA_CONTEXT_ERROR:
+        case StatusCode::CUDA_STREAM_ERROR:
+        case StatusCode::CUDA_EVENT_ERROR:
+        case StatusCode::CUDA_INVALID_DEVICE:
+        case StatusCode::CUDA_INVALID_VALUE:
+        case StatusCode::CUDA_OUT_OF_MEMORY:
+        case StatusCode::CUDA_LAUNCH_FAILED:
+            return ErrorCategory::CUDA;
+        case StatusCode::MEMORY_ERROR:
+        case StatusCode::OUT_OF_MEMORY:
+        case StatusCode::MEMORY_ALLOCATION_FAILED:
+        case StatusCode::MEMORY_DEALLOCATION_FAILED:
+        case StatusCode::MEMORY_COPY_FAILED:
+        case StatusCode::MEMORY_ALIGNMENT_ERROR:
+        case StatusCode::MEMORY_POOL_ERROR:
+        case StatusCode::MEMORY_FREE_FAILED:
+            return ErrorCategory::MEMORY;
+        case StatusCode::VALIDATION_ERROR:
+        case StatusCode::INVALID_ARGUMENT:
+        case StatusCode::INVALID_CONFIGURATION:
+        case StatusCode::INVALID_STATE:
+        case StatusCode::INVALID_FORMAT:
+        case StatusCode::INVALID_DIMENSION:
+        case StatusCode::INVALID_TYPE:
+        case StatusCode::INVALID_OPERATION:
+        case StatusCode::INVALID_INPUT:
+        case StatusCode::INVALID_OUTPUT:
+        case StatusCode::INVALID_DIMENSIONS:
+        case StatusCode::INVALID_DATA_TYPE:
+        case StatusCode::TENSOR_DIMENSION_MISMATCH:
+        case StatusCode::TENSOR_SHAPE_MISMATCH:
+        case StatusCode::TENSOR_TYPE_MISMATCH:
+        case StatusCode::TENSOR_SIZE_MISMATCH:
+        case StatusCode::TENSOR_INDEX_OUT_OF_BOUNDS:
+        case StatusCode::TENSOR_STRIDE_ERROR:
+        case StatusCode::TENSOR_LAYOUT_ERROR:
+            return ErrorCategory::VALIDATION;
+        case StatusCode::COMPILATION_ERROR:
+        case StatusCode::COMPILATION_FAILED:
+        case StatusCode::COMPILATION_TIMEOUT:
+        case StatusCode::COMPILATION_INVALID_CODE:
+        case StatusCode::COMPILATION_INVALID_OPTIONS:
+        case StatusCode::COMPILATION_LINKING_ERROR:
+        case StatusCode::COMPILATION_OPTIMIZATION_ERROR:
+        case StatusCode::JIT_COMPILATION_FAILED:
+        case StatusCode::JIT_ERROR:
+        case StatusCode::JIT_NOT_INITIALIZED:
+        case StatusCode::JIT_INITIALIZATION_ERROR:
+        case StatusCode::JIT_NOT_COMPILED:
+        case StatusCode::JIT_COMPILATION_ERROR:
+        case StatusCode::JIT_EXECUTION_ERROR:
+        case StatusCode::JIT_PLUGIN_ERROR:
+        case StatusCode::JIT_TEMPLATE_ERROR:
+        case StatusCode::JIT_CACHE_ERROR:
+        case StatusCode::EXECUTION_ERROR:
+        case StatusCode::EXECUTION_FAILED:
+        case StatusCode::EXECUTION_TIMEOUT:
+        case StatusCode::EXECUTION_INTERRUPTED:
+        case StatusCode::EXECUTION_INVALID_KERNEL:
+        case StatusCode::EXECUTION_KERNEL_NOT_FOUND:
+        case StatusCode::KERNEL_LAUNCH_FAILED:
+            return ErrorCategory::EXECUTION;
+        case StatusCode::SYSTEM_ERROR:
+        case StatusCode::NOT_IMPLEMENTED:
+        case StatusCode::UNSUPPORTED_OPERATION:
+        case StatusCode::TIMEOUT:
+        case StatusCode::INTERRUPTED:
+        case StatusCode::RESOURCE_UNAVAILABLE:
+        case StatusCode::FILE_NOT_FOUND:
+        case StatusCode::PERMISSION_DENIED:
+            return ErrorCategory::SYSTEM;
+        default: return ErrorCategory::UNKNOWN;
+    }
+}
 
 // 错误信息结构
 struct ErrorInfo {
@@ -211,7 +313,102 @@ private:
 namespace ErrorUtils {
 
 // 获取错误分类
-ErrorCategory GetErrorCategory(StatusCode code);
+inline ErrorCategory GetErrorCategory(StatusCode code) {
+    switch (code) {
+        case StatusCode::SUCCESS:
+            return ErrorCategory::SUCCESS;
+        case StatusCode::CUDA_ERROR:
+        case StatusCode::CUDA_DRIVER_ERROR:
+        case StatusCode::CUDA_RUNTIME_ERROR:
+        case StatusCode::CUDA_MEMORY_ERROR:
+        case StatusCode::CUDA_KERNEL_ERROR:
+        case StatusCode::CUDA_LAUNCH_ERROR:
+        case StatusCode::CUDA_SYNC_ERROR:
+        case StatusCode::CUDA_DEVICE_ERROR:
+        case StatusCode::CUDA_CONTEXT_ERROR:
+        case StatusCode::CUDA_STREAM_ERROR:
+        case StatusCode::CUDA_EVENT_ERROR:
+        case StatusCode::CUDA_INVALID_DEVICE:
+        case StatusCode::CUDA_INVALID_VALUE:
+        case StatusCode::CUDA_OUT_OF_MEMORY:
+        case StatusCode::CUDA_LAUNCH_FAILED:
+            return ErrorCategory::CUDA;
+        case StatusCode::MEMORY_ERROR:
+        case StatusCode::OUT_OF_MEMORY:
+        case StatusCode::MEMORY_ALLOCATION_FAILED:
+        case StatusCode::MEMORY_DEALLOCATION_FAILED:
+        case StatusCode::MEMORY_COPY_FAILED:
+        case StatusCode::MEMORY_ALIGNMENT_ERROR:
+        case StatusCode::MEMORY_POOL_ERROR:
+        case StatusCode::MEMORY_FREE_FAILED:
+            return ErrorCategory::MEMORY;
+        case StatusCode::VALIDATION_ERROR:
+        case StatusCode::INVALID_ARGUMENT:
+        case StatusCode::INVALID_CONFIGURATION:
+        case StatusCode::INVALID_STATE:
+        case StatusCode::INVALID_FORMAT:
+        case StatusCode::INVALID_DIMENSION:
+        case StatusCode::INVALID_TYPE:
+        case StatusCode::INVALID_OPERATION:
+        case StatusCode::INVALID_INPUT:
+        case StatusCode::INVALID_OUTPUT:
+        case StatusCode::INVALID_DIMENSIONS:
+        case StatusCode::INVALID_DATA_TYPE:
+            return ErrorCategory::VALIDATION;
+        case StatusCode::COMPILATION_ERROR:
+        case StatusCode::COMPILATION_FAILED:
+        case StatusCode::COMPILATION_TIMEOUT:
+        case StatusCode::COMPILATION_INVALID_CODE:
+        case StatusCode::COMPILATION_INVALID_OPTIONS:
+        case StatusCode::COMPILATION_LINKING_ERROR:
+        case StatusCode::COMPILATION_OPTIMIZATION_ERROR:
+        case StatusCode::JIT_COMPILATION_FAILED:
+            return ErrorCategory::COMPILATION;
+        case StatusCode::EXECUTION_ERROR:
+        case StatusCode::EXECUTION_FAILED:
+        case StatusCode::EXECUTION_TIMEOUT:
+        case StatusCode::EXECUTION_INTERRUPTED:
+        case StatusCode::EXECUTION_INVALID_KERNEL:
+        case StatusCode::EXECUTION_KERNEL_NOT_FOUND:
+        case StatusCode::KERNEL_LAUNCH_FAILED:
+            return ErrorCategory::EXECUTION;
+        case StatusCode::JIT_ERROR:
+        case StatusCode::JIT_NOT_INITIALIZED:
+        case StatusCode::JIT_INITIALIZATION_ERROR:
+        case StatusCode::JIT_NOT_COMPILED:
+        case StatusCode::JIT_COMPILATION_ERROR:
+        case StatusCode::JIT_EXECUTION_ERROR:
+        case StatusCode::JIT_PLUGIN_ERROR:
+        case StatusCode::JIT_TEMPLATE_ERROR:
+        case StatusCode::JIT_CACHE_ERROR:
+            return ErrorCategory::JIT;
+        case StatusCode::CACHE_ERROR:
+        case StatusCode::CACHE_NOT_FOUND:
+        case StatusCode::CACHE_CORRUPTED:
+        case StatusCode::CACHE_FULL:
+        case StatusCode::CACHE_ACCESS_ERROR:
+        case StatusCode::CACHE_SERIALIZATION_ERROR:
+        case StatusCode::CACHE_DESERIALIZATION_ERROR:
+        case StatusCode::CACHE_VERSION_MISMATCH:
+        case StatusCode::CACHE_MISS:
+            return ErrorCategory::CACHE;
+        case StatusCode::PLUGIN_ERROR:
+        case StatusCode::PLUGIN_NOT_FOUND:
+            return ErrorCategory::PLUGIN;
+        case StatusCode::TENSOR_ERROR:
+        case StatusCode::TENSOR_SHAPE_MISMATCH:
+            return ErrorCategory::TENSOR;
+        case StatusCode::OPERATOR_ERROR:
+        case StatusCode::OPERATOR_NOT_SUPPORTED:
+            return ErrorCategory::OPERATOR;
+        case StatusCode::SYSTEM_ERROR:
+        case StatusCode::FILE_NOT_FOUND:
+        case StatusCode::PERMISSION_DENIED:
+            return ErrorCategory::SYSTEM;
+        default:
+            return ErrorCategory::UNKNOWN;
+    }
+}
 
 // 获取错误码字符串表示
 std::string GetStatusCodeString(StatusCode code);
@@ -270,5 +467,6 @@ std::ostream& operator<<(std::ostream& os, const Status& status);
 inline const char* StatusCodeToString(StatusCode code) {
     return ErrorUtils::GetStatusCodeString(code).c_str();
 }
+
 
 } // namespace cu_op_mem

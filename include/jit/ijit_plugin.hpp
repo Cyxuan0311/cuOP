@@ -4,6 +4,7 @@
 #include "data/tensor.hpp"
 #include "util/status_code.hpp"
 #include <cuda_runtime.h>
+#include <cuda.h>
 #include <memory>
 #include <string>
 #include <vector>
@@ -12,7 +13,6 @@ namespace cu_op_mem {
 
 // 前向声明
 class JITCompiler;
-class AutoTuner;
 
 // JIT插件接口
 class IJITPlugin {
@@ -66,10 +66,9 @@ protected:
     bool ValidateConfig(const JITConfig& config) const;
     JITConfig OptimizeConfig(const JITConfig& config) const;
     
-private:
-    // 内部实现细节
+protected:
+    // 内部实现细节 - 子类可以访问
     std::unique_ptr<JITCompiler> compiler_;
-    std::unique_ptr<AutoTuner> tuner_;
     JITConfig config_;
     bool initialized_ = false;
     bool compiled_ = false;

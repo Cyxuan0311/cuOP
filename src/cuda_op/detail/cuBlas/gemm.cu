@@ -112,9 +112,9 @@ __global__ void gemm_kernel_warp_optimized(int m, int n, int k, T alpha, const T
 }
 
 // ==================== Kernel 4: Tensor Core版本 (集成实现) ====================
-#if __CUDA_ARCH__ >= 700
 __global__ void gemm_kernel_tensor_core_fp16(int m, int n, int k, half alpha, 
                                             const half* A, const half* B, half beta, half* C) {
+#if __CUDA_ARCH__ >= 700
     using namespace nvcuda::wmma;
     
     // 定义tile大小
@@ -167,11 +167,25 @@ __global__ void gemm_kernel_tensor_core_fp16(int m, int n, int k, half alpha,
     if (cRow < m && cCol < n) {
         store_matrix_sync(C + cRow * n + cCol, c_frag, n, mem_row_major);
     }
+#else
+    // 对于不支持Tensor Core的架构，使用简单的实现
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    
+    if (row < m && col < n) {
+        half sum = 0.0f;
+        for (int i = 0; i < k; ++i) {
+            sum += A[row * k + i] * B[i * n + col];
+        }
+        C[row * n + col] = alpha * sum + beta * C[row * n + col];
+    }
+#endif
 }
 
 // 混合精度Tensor Core GEMM (FP16输入，FP32累加)
 __global__ void gemm_kernel_tensor_core_mixed(int m, int n, int k, float alpha, 
                                              const half* A, const half* B, float beta, float* C) {
+#if __CUDA_ARCH__ >= 700
     using namespace nvcuda::wmma;
     
     const int M_TILES = (m + 15) / 16;
@@ -216,8 +230,20 @@ __global__ void gemm_kernel_tensor_core_mixed(int m, int n, int k, float alpha,
     if (cRow < m && cCol < n) {
         store_matrix_sync(C + cRow * n + cCol, c_frag, n, mem_row_major);
     }
-}
+#else
+    // 对于不支持Tensor Core的架构，使用简单的实现
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    
+    if (row < m && col < n) {
+        float sum = 0.0f;
+        for (int i = 0; i < k; ++i) {
+            sum += __half2float(A[row * k + i]) * __half2float(B[i * n + col]);
+        }
+        C[row * n + col] = alpha * sum + beta * C[row * n + col];
+    }
 #endif
+}
 
 // ==================== Kernel 5: 分块优化版本 (大矩阵) ====================
 template <typename T, int BLOCK_SIZE>
@@ -353,7 +379,7 @@ StatusCode Gemm<T>::Forward(const Tensor<T>& input, Tensor<T>& output) {
         case GemmKernelType::BASIC: {
             dim3 threads(16, 16);
             dim3 blocks((n + 15) / 16, (m + 15) / 16);
-            gemm_kernel_basic<T><<<blocks, threads>>>(
+            cu_op_mem::gemm_kernel_basic<T><<<blocks, threads>>>(
                 m, n, k, alpha_, d_A, d_B, beta_, d_C, 
                 transA_, transB_, k, n, n
             );
@@ -364,7 +390,7 @@ StatusCode Gemm<T>::Forward(const Tensor<T>& input, Tensor<T>& output) {
             constexpr int TILE_SIZE = 16;
             dim3 threads(TILE_SIZE, TILE_SIZE);
             dim3 blocks((n + TILE_SIZE - 1) / TILE_SIZE, (m + TILE_SIZE - 1) / TILE_SIZE);
-            gemm_kernel_tiled<T, TILE_SIZE><<<blocks, threads>>>(
+            cu_op_mem::gemm_kernel_tiled<T, TILE_SIZE><<<blocks, threads>>>(
                 m, n, k, alpha_, d_A, d_B, beta_, d_C
             );
             break;
@@ -374,7 +400,7 @@ StatusCode Gemm<T>::Forward(const Tensor<T>& input, Tensor<T>& output) {
             constexpr int TILE_SIZE = 32;  // Warp size
             dim3 threads(TILE_SIZE, TILE_SIZE);
             dim3 blocks((n + TILE_SIZE - 1) / TILE_SIZE, (m + TILE_SIZE - 1) / TILE_SIZE);
-            gemm_kernel_warp_optimized<T, TILE_SIZE><<<blocks, threads>>>(
+            cu_op_mem::gemm_kernel_warp_optimized<T, TILE_SIZE><<<blocks, threads>>>(
                 m, n, k, alpha_, d_A, d_B, beta_, d_C
             );
             break;
@@ -384,7 +410,7 @@ StatusCode Gemm<T>::Forward(const Tensor<T>& input, Tensor<T>& output) {
             constexpr int BLOCK_SIZE = 32;
             dim3 threads(BLOCK_SIZE, BLOCK_SIZE);
             dim3 blocks((n + BLOCK_SIZE - 1) / BLOCK_SIZE, (m + BLOCK_SIZE - 1) / BLOCK_SIZE);
-            gemm_kernel_blocked<T, BLOCK_SIZE><<<blocks, threads>>>(
+            cu_op_mem::gemm_kernel_blocked<T, BLOCK_SIZE><<<blocks, threads>>>(
                 m, n, k, alpha_, d_A, d_B, beta_, d_C
             );
             break;
@@ -425,9 +451,9 @@ StatusCode Gemm<T>::Forward(const Tensor<T>& input, Tensor<T>& output) {
         return StatusCode::CUDA_ERROR;
     }
     
-    VLOG(1) << "Gemm: C = " << alpha_ << " * A * B + " << beta_ << " * C, "
-            << "m = " << m << ", n = " << n << ", k = " << k 
-            << ", kernel = " << static_cast<int>(kernel_type);
+    LOG(INFO) << "Gemm: C = " << alpha_ << " * A * B + " << beta_ << " * C, "
+              << "m = " << m << ", n = " << n << ", k = " << k 
+              << ", kernel = " << static_cast<int>(kernel_type);
     
     return StatusCode::SUCCESS;
 }
