@@ -1,6 +1,7 @@
 /**.vscode**/
 **/build/**
 **/third_party/**
+**/lib/**
 
 test_cuda
 test_cuda.cu
