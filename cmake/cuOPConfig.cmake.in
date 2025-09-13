@@ -1,0 +1,36 @@
+# cuOP CMake 配置文件
+# 此文件由 cuOP 项目自动生成
+
+@PACKAGE_INIT@
+
+# 包含目标文件
+include("${CMAKE_CURRENT_LIST_DIR}/cuOPTargets.cmake")
+
+# 检查必需的组件
+check_required_components(cuOP)
+
+# 设置变量
+set(cuOP_VERSION @PROJECT_VERSION@)
+set(cuOP_FOUND TRUE)
+
+# 提供便捷的变量
+set(cuOP_INCLUDE_DIRS "@PACKAGE_INCLUDE_INSTALL_DIR@")
+set(cuOP_LIBRARIES cuOP::cuop_cublas cuOP::cuop_dnn cuOP::cuop_jit cuOP::cuop_performance)
+
+# 提供查找函数
+function(find_cuOP_components)
+    set(cuOP_CUBLAS_FOUND TRUE)
+    set(cuOP_DNN_FOUND TRUE)
+    set(cuOP_JIT_FOUND TRUE)
+    set(cuOP_PERFORMANCE_FOUND TRUE)
+    
+    set(cuOP_CUBLAS_FOUND ${cuOP_CUBLAS_FOUND} PARENT_SCOPE)
+    set(cuOP_DNN_FOUND ${cuOP_DNN_FOUND} PARENT_SCOPE)
+    set(cuOP_JIT_FOUND ${cuOP_JIT_FOUND} PARENT_SCOPE)
+    set(cuOP_PERFORMANCE_FOUND ${cuOP_PERFORMANCE_FOUND} PARENT_SCOPE)
+endfunction()
+
+# 提供版本信息
+set(cuOP_VERSION_MAJOR @PROJECT_VERSION_MAJOR@)
+set(cuOP_VERSION_MINOR @PROJECT_VERSION_MINOR@)
+set(cuOP_VERSION_PATCH @PROJECT_VERSION_PATCH@)

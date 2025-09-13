@@ -1,0 +1,13 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: cuOP
+Description: CUDA Operations Memory Management Library
+Version: @PROJECT_VERSION@
+URL: https://github.com/Cyxuan0311/cuOP
+
+Requires: 
+Libs: -L${libdir} -lcuop_cublas -lcuop_dnn -lcuop_jit -lcuop_performance
+Cflags: -I${includedir}
