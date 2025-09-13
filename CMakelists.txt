@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.14)
-project(cuOP LANGUAGES CXX CUDA)
+project(cuOP 
+    VERSION 1.0.0
+    DESCRIPTION "CUDA Operations Memory Management Library"
+    LANGUAGES CXX CUDA
+)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -19,6 +23,9 @@ pkg_check_modules(GLOG REQUIRED libglog)
 # 查找jsoncpp
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(JSONCPP REQUIRED jsoncpp)
+
+# 包含CMake包配置助手
+include(CMakePackageConfigHelpers)
 
 # 设置CUDA架构
 set(CMAKE_CUDA_ARCHITECTURES 75 80 86 89)
@@ -99,10 +106,77 @@ target_include_directories(cuop_dnn PRIVATE ${CMAKE_SOURCE_DIR}/include)
 set_target_properties(cuop_dnn PROPERTIES OUTPUT_NAME "cuop_dnn" LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/lib")
 message(STATUS "Building cuop_dnn library with custom CUDA implementations")
 
-# 安装规则
+# ==================== 安装配置 ====================
+
+# 设置安装前缀
+if(NOT CMAKE_INSTALL_PREFIX)
+    set(CMAKE_INSTALL_PREFIX "/usr/local")
+endif()
+
+# 安装动态库
 install(TARGETS cuop_cublas cuop_dnn cuop_jit cuop_performance
-        LIBRARY DESTINATION lib)
-install(DIRECTORY include/ DESTINATION include)
+        EXPORT cuOPTargets
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib
+        RUNTIME DESTINATION bin
+        INCLUDES DESTINATION include)
+
+# 安装头文件
+install(DIRECTORY include/ 
+        DESTINATION include
+        FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
+
+# 安装CMake配置文件
+install(EXPORT cuOPTargets
+        FILE cuOPTargets.cmake
+        NAMESPACE cuOP::
+        DESTINATION lib/cmake/cuOP)
+
+# 创建并安装cuOPConfig.cmake
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/cuOPConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/cuOPConfig.cmake"
+    @ONLY
+)
+
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cuOPConfig.cmake"
+        DESTINATION lib/cmake/cuOP)
+
+# 安装版本文件
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/cuOPConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY AnyNewerVersion
+)
+
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cuOPConfigVersion.cmake"
+        DESTINATION lib/cmake/cuOP)
+
+# 安装示例和文档
+install(DIRECTORY examples/
+        DESTINATION share/cuOP/examples
+        OPTIONAL)
+
+install(DIRECTORY docs/
+        DESTINATION share/cuOP/docs
+        OPTIONAL)
+
+# 安装pkg-config文件
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/cuOP.pc.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/cuOP.pc"
+    @ONLY
+)
+
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cuOP.pc"
+        DESTINATION lib/pkgconfig)
+
+# 显示安装信息
+message(STATUS "Installation paths:")
+message(STATUS "  Libraries: ${CMAKE_INSTALL_PREFIX}/lib")
+message(STATUS "  Headers: ${CMAKE_INSTALL_PREFIX}/include")
+message(STATUS "  CMake config: ${CMAKE_INSTALL_PREFIX}/lib/cmake/cuOP")
+message(STATUS "  pkg-config: ${CMAKE_INSTALL_PREFIX}/lib/pkgconfig")
 
 # 添加JIT测试子目录
 add_subdirectory(test/JIT_test)
