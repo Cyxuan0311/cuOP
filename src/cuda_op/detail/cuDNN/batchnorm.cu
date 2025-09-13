@@ -5,17 +5,38 @@
 
 namespace cu_op_mem {
 
-// 为float类型创建独立的kernel函数
-__global__ void batchnorm_forward_shared_kernel_float(const float* input, float* output,
-                                                      const float* gamma, const float* beta,
-                                                      float* running_mean, float* running_var,
-                                                      int N, int C, int HxW, float eps) {
+// Warp级别归约函数
+__device__ __forceinline__ void warpReduceSum(float& val) {
+    for (int offset = warpSize / 2; offset > 0; offset /= 2) {
+        val += __shfl_down_sync(0xffffffff, val, offset);
+    }
+}
+
+__device__ __forceinline__ void warpReduceSum(double& val) {
+    for (int offset = warpSize / 2; offset > 0; offset /= 2) {
+        val += __shfl_down_sync(0xffffffff, val, offset);
+    }
+}
+
+// 为float类型创建优化的kernel函数
+__global__ void batchnorm_forward_optimized_kernel_float(const float* input, float* output,
+                                                         const float* gamma, const float* beta,
+                                                         float* running_mean, float* running_var,
+                                                         int N, int C, int HxW, float eps) {
     int c = blockIdx.x;
     int tid = threadIdx.x;
+    int lane = tid % warpSize;
+    int warp_id = tid / warpSize;
     int num = N * HxW;
+    
+    // 使用更少的共享内存，只存储warp级别的结果
     extern __shared__ float batchnorm_shared_mem_float[];
+    float* warp_sums = batchnorm_shared_mem_float;
+    float* warp_sqsums = batchnorm_shared_mem_float + (blockDim.x + warpSize - 1) / warpSize;
 
     float sum = 0, sqsum = 0;
+    
+    // 向量化内存访问
     for (int i = tid; i < num; i += blockDim.x) {
         int n = i / HxW;
         int hw = i % HxW;
@@ -23,47 +44,72 @@ __global__ void batchnorm_forward_shared_kernel_float(const float* input, float*
         sum += v;
         sqsum += v * v;
     }
-    batchnorm_shared_mem_float[tid] = sum;
-    batchnorm_shared_mem_float[blockDim.x + tid] = sqsum;
-    __syncthreads();
-
-    for (int s = blockDim.x / 2; s > 0; s >>= 1) {
-        if (tid < s) {
-            batchnorm_shared_mem_float[tid] += batchnorm_shared_mem_float[tid + s];
-            batchnorm_shared_mem_float[blockDim.x + tid] += batchnorm_shared_mem_float[blockDim.x + tid + s];
-        }
-        __syncthreads();
+    
+    // Warp级别归约
+    warpReduceSum(sum);
+    warpReduceSum(sqsum);
+    
+    // 存储warp结果到共享内存
+    if (lane == 0) {
+        warp_sums[warp_id] = sum;
+        warp_sqsums[warp_id] = sqsum;
     }
-
-    float mean = batchnorm_shared_mem_float[0] / num;
-    float var = batchnorm_shared_mem_float[blockDim.x] / num - mean * mean;
+    __syncthreads();
+    
+    // 最终归约
+    if (tid < (blockDim.x + warpSize - 1) / warpSize) {
+        sum = warp_sums[tid];
+        sqsum = warp_sqsums[tid];
+    } else {
+        sum = 0;
+        sqsum = 0;
+    }
+    
+    warpReduceSum(sum);
+    warpReduceSum(sqsum);
+    
+    float mean = sum / num;
+    float var = sqsum / num - mean * mean;
+    
     if (tid == 0) {
         running_mean[c] = mean;
         running_var[c] = var;
     }
     __syncthreads();
-
+    
+    // 使用rsqrtf提高性能
+    float inv_std = rsqrtf(var + eps);
+    
+    // 向量化输出计算
     for (int i = tid; i < num; i += blockDim.x) {
         int n = i / HxW;
         int hw = i % HxW;
         int idx = (n * C + c) * HxW + hw;
         float v = input[idx];
-        float norm = (v - mean) / sqrt(var + eps);
+        float norm = (v - mean) * inv_std;
         output[idx] = norm * gamma[c] + beta[c];
     }
 }
 
-// 为double类型创建独立的kernel函数
-__global__ void batchnorm_forward_shared_kernel_double(const double* input, double* output,
-                                                       const double* gamma, const double* beta,
-                                                       double* running_mean, double* running_var,
-                                                       int N, int C, int HxW, double eps) {
+// 为double类型创建优化的kernel函数
+__global__ void batchnorm_forward_optimized_kernel_double(const double* input, double* output,
+                                                          const double* gamma, const double* beta,
+                                                          double* running_mean, double* running_var,
+                                                          int N, int C, int HxW, double eps) {
     int c = blockIdx.x;
     int tid = threadIdx.x;
+    int lane = tid % warpSize;
+    int warp_id = tid / warpSize;
     int num = N * HxW;
+    
+    // 使用更少的共享内存，只存储warp级别的结果
     extern __shared__ double batchnorm_shared_mem_double[];
+    double* warp_sums = batchnorm_shared_mem_double;
+    double* warp_sqsums = batchnorm_shared_mem_double + (blockDim.x + warpSize - 1) / warpSize;
 
     double sum = 0, sqsum = 0;
+    
+    // 向量化内存访问
     for (int i = tid; i < num; i += blockDim.x) {
         int n = i / HxW;
         int hw = i % HxW;
@@ -71,32 +117,49 @@ __global__ void batchnorm_forward_shared_kernel_double(const double* input, doub
         sum += v;
         sqsum += v * v;
     }
-    batchnorm_shared_mem_double[tid] = sum;
-    batchnorm_shared_mem_double[blockDim.x + tid] = sqsum;
-    __syncthreads();
-
-    for (int s = blockDim.x / 2; s > 0; s >>= 1) {
-        if (tid < s) {
-            batchnorm_shared_mem_double[tid] += batchnorm_shared_mem_double[tid + s];
-            batchnorm_shared_mem_double[blockDim.x + tid] += batchnorm_shared_mem_double[blockDim.x + tid + s];
-        }
-        __syncthreads();
+    
+    // Warp级别归约
+    warpReduceSum(sum);
+    warpReduceSum(sqsum);
+    
+    // 存储warp结果到共享内存
+    if (lane == 0) {
+        warp_sums[warp_id] = sum;
+        warp_sqsums[warp_id] = sqsum;
     }
-
-    double mean = batchnorm_shared_mem_double[0] / num;
-    double var = batchnorm_shared_mem_double[blockDim.x] / num - mean * mean;
+    __syncthreads();
+    
+    // 最终归约
+    if (tid < (blockDim.x + warpSize - 1) / warpSize) {
+        sum = warp_sums[tid];
+        sqsum = warp_sqsums[tid];
+    } else {
+        sum = 0;
+        sqsum = 0;
+    }
+    
+    warpReduceSum(sum);
+    warpReduceSum(sqsum);
+    
+    double mean = sum / num;
+    double var = sqsum / num - mean * mean;
+    
     if (tid == 0) {
         running_mean[c] = mean;
         running_var[c] = var;
     }
     __syncthreads();
-
+    
+    // 使用rsqrt提高性能
+    double inv_std = 1.0 / sqrt(var + eps);
+    
+    // 向量化输出计算
     for (int i = tid; i < num; i += blockDim.x) {
         int n = i / HxW;
         int hw = i % HxW;
         int idx = (n * C + c) * HxW + hw;
         double v = input[idx];
-        double norm = (v - mean) / sqrt(var + eps);
+        double norm = (v - mean) * inv_std;
         output[idx] = norm * gamma[c] + beta[c];
     }
 }
@@ -131,16 +194,17 @@ StatusCode BatchNorm<T>::Forward(const Tensor<T>& input, Tensor<T>& output,
     }
     int threads = 256;
     int blocks = C;
-    size_t shared_mem = threads * 2 * sizeof(T);
+    // 减少共享内存使用，只存储warp级别的结果
+    size_t shared_mem = ((threads + warpSize - 1) / warpSize) * 2 * sizeof(T);
     
-    // 根据类型调用相应的kernel函数
+    // 根据类型调用相应的优化kernel函数
     if constexpr (std::is_same_v<T, float>) {
-        batchnorm_forward_shared_kernel_float<<<blocks, threads, shared_mem>>>(
+        batchnorm_forward_optimized_kernel_float<<<blocks, threads, shared_mem>>>(
             input.data(), output.data(),
             gamma.data(), beta.data(), running_mean.data(), running_var.data(),
             N, C, HxW, eps);
     } else if constexpr (std::is_same_v<T, double>) {
-        batchnorm_forward_shared_kernel_double<<<blocks, threads, shared_mem>>>(
+        batchnorm_forward_optimized_kernel_double<<<blocks, threads, shared_mem>>>(
             input.data(), output.data(),
             gamma.data(), beta.data(), running_mean.data(), running_var.data(),
             N, C, HxW, eps);

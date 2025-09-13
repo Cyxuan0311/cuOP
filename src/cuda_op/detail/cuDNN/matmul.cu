@@ -4,8 +4,60 @@
 
 namespace cu_op_mem {
 
+// 优化的矩阵乘法kernel，使用共享内存和分块技术
 template <typename T>
-__global__ void matmul_kernel(const T* A, const T* B, T* C, int M, int N, int K, bool transA, bool transB) {
+__global__ void matmul_optimized_kernel(const T* A, const T* B, T* C, int M, int N, int K, bool transA, bool transB) {
+    // 分块大小
+    const int BLOCK_SIZE = 16;
+    
+    // 共享内存用于缓存数据块
+    __shared__ T As[BLOCK_SIZE][BLOCK_SIZE];
+    __shared__ T Bs[BLOCK_SIZE][BLOCK_SIZE];
+    
+    int row = blockIdx.y * BLOCK_SIZE + threadIdx.y;
+    int col = blockIdx.x * BLOCK_SIZE + threadIdx.x;
+    
+    T sum = 0;
+    
+    // 分块矩阵乘法
+    for (int tile = 0; tile < (K + BLOCK_SIZE - 1) / BLOCK_SIZE; ++tile) {
+        // 协作加载A块到共享内存
+        int A_row = row;
+        int A_col = tile * BLOCK_SIZE + threadIdx.x;
+        if (A_row < M && A_col < K) {
+            As[threadIdx.y][threadIdx.x] = transA ? A[A_col * M + A_row] : A[A_row * K + A_col];
+        } else {
+            As[threadIdx.y][threadIdx.x] = 0;
+        }
+        
+        // 协作加载B块到共享内存
+        int B_row = tile * BLOCK_SIZE + threadIdx.y;
+        int B_col = col;
+        if (B_row < K && B_col < N) {
+            Bs[threadIdx.y][threadIdx.x] = transB ? B[B_col * K + B_row] : B[B_row * N + B_col];
+        } else {
+            Bs[threadIdx.y][threadIdx.x] = 0;
+        }
+        
+        __syncthreads();
+        
+        // 计算部分积
+        for (int k = 0; k < BLOCK_SIZE; ++k) {
+            sum += As[threadIdx.y][k] * Bs[k][threadIdx.x];
+        }
+        
+        __syncthreads();
+    }
+    
+    // 写入结果
+    if (row < M && col < N) {
+        C[row * N + col] = sum;
+    }
+}
+
+// 简单的矩阵乘法kernel（用于小矩阵）
+template <typename T>
+__global__ void matmul_simple_kernel(const T* A, const T* B, T* C, int M, int N, int K, bool transA, bool transB) {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
     if (row < M && col < N) {
@@ -37,9 +89,19 @@ StatusCode MatMul<T>::Forward(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>&
             return StatusCode::SHAPE_MISMATCH;
         }
         C.resize({static_cast<size_t>(M), static_cast<size_t>(N)});
-        dim3 block(16, 16);
-        dim3 grid((N + block.x - 1) / block.x, (M + block.y - 1) / block.y);
-        matmul_kernel<T><<<grid, block>>>(A.data(), B.data(), C.data(), M, N, K, transA_, transB_);
+        
+        // 根据矩阵大小选择kernel
+        if (M >= 32 && N >= 32 && K >= 32) {
+            // 大矩阵使用优化的分块kernel
+            dim3 block(16, 16);
+            dim3 grid((N + block.x - 1) / block.x, (M + block.y - 1) / block.y);
+            matmul_optimized_kernel<T><<<grid, block>>>(A.data(), B.data(), C.data(), M, N, K, transA_, transB_);
+        } else {
+            // 小矩阵使用简单kernel
+            dim3 block(16, 16);
+            dim3 grid((N + block.x - 1) / block.x, (M + block.y - 1) / block.y);
+            matmul_simple_kernel<T><<<grid, block>>>(A.data(), B.data(), C.data(), M, N, K, transA_, transB_);
+        }
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) {
             LOG(ERROR) << "MatMul kernel failed: " << cudaGetErrorString(err);
@@ -63,13 +125,24 @@ StatusCode MatMul<T>::Forward(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>&
         const T* b_ptr = B.data();
         T* c_ptr = C.data();
         for (int b = 0; b < BATCH; ++b) {
-            dim3 block(16, 16);
-            dim3 grid((N + block.x - 1) / block.x, (M + block.y - 1) / block.y);
-            matmul_kernel<T><<<grid, block>>>(
-                a_ptr + b * M * K,
-                b_ptr + b * K * N,
-                c_ptr + b * M * N,
-                M, N, K, transA_, transB_);
+            // 根据矩阵大小选择kernel
+            if (M >= 32 && N >= 32 && K >= 32) {
+                dim3 block(16, 16);
+                dim3 grid((N + block.x - 1) / block.x, (M + block.y - 1) / block.y);
+                matmul_optimized_kernel<T><<<grid, block>>>(
+                    a_ptr + b * M * K,
+                    b_ptr + b * K * N,
+                    c_ptr + b * M * N,
+                    M, N, K, transA_, transB_);
+            } else {
+                dim3 block(16, 16);
+                dim3 grid((N + block.x - 1) / block.x, (M + block.y - 1) / block.y);
+                matmul_simple_kernel<T><<<grid, block>>>(
+                    a_ptr + b * M * K,
+                    b_ptr + b * K * N,
+                    c_ptr + b * M * N,
+                    M, N, K, transA_, transB_);
+            }
         }
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) {
