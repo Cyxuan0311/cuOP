@@ -79,7 +79,9 @@ cuOP/
 │       ├── test_status_code.cpp    # 错误码系统测试
 │       └── CMakeLists.txt          # 工具测试构建配置
 ├── docs/                   # 项目文档
-│   └── jit_persistent_cache_guide.md # JIT持久化缓存使用指南
+│   ├── DNN_OPERATORS.md    # DNN算子详解文档
+│   ├── jit_persistent_cache_guide.md # JIT持久化缓存使用指南
+│   └── performance_monitoring_guide.md # 性能监控指南
 ├── third_party/            # 第三方依赖
 ├── CMakeLists.txt          # 顶层 CMake 构建脚本
 ├── .clang-format           # 代码风格配置
@@ -351,10 +353,13 @@ cuop.synchronize()
 
 ## 📚 文档
 
-- **JIT系统**: 详细文档请参考 `src/jit/jit_docs.md`
-- **持久化缓存**: 使用指南请参考 `docs/jit_persistent_cache_guide.md`
-- **Python API**: 完整文档请参考 `python/README.md`
-- **错误码系统**: 参考 `include/util/status_code.hpp`
+- **DNN算子详解**: 深度学习算子完整文档请参考 [docs/DNN_OPERATORS.md](docs/DNN_OPERATORS.md)
+- **JIT系统**: 详细文档请参考 [src/jit/jit_docs.md](src/jit/jit_docs.md)
+- **持久化缓存**: 使用指南请参考 [docs/jit_persistent_cache_guide.md](docs/jit_persistent_cache_guide.md)
+- **性能监控**: 性能分析和优化指南请参考 [docs/performance_monitoring_guide.md](docs/performance_monitoring_guide.md)
+- **Python API**: 完整文档请参考 [python/README.md](python/README.md)
+- **内存池管理**: 内存池优化指南请参考 [src/base/README_memory_pool.md](src/base/README_memory_pool.md)
+- **错误码系统**: 参考 [include/util/status_code.hpp](include/util/status_code.hpp)
 
 ## 🤝 贡献
 
