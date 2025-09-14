@@ -301,6 +301,7 @@ make -j$(nproc)
 ## 📚 相关文档
 
 - [cuOP 主文档](../README.md)
+- [BLAS 算子文档](./BLAS_OPERATORS.md)
 - [JIT 系统文档](../src/jit/jit_docs.md)
 - [内存池优化](../docs/memory_pool_guide.md)
 - [Python API 文档](../python/README.md)
@@ -308,3 +309,5 @@ make -j$(nproc)
 ---
 
 **cuOP DNN 算子库** - 为深度学习提供高性能的 CUDA 算子实现！ 🚀
+
+
