@@ -5,7 +5,7 @@
 
 namespace cu_op_mem {
 
-// 仅支持 side=left, uplo=lower, trans=no, diag=non-unit，单线程实现
+// 基础kernel - 保持向后兼容
 template <typename T>
 __global__ void trsm_left_lower_kernel(int m, int n, T alpha, const T* A, T* B) {
     // A: m x m lower-triangular, B: m x n, solve AX = alpha*B, overwrite B with X
@@ -18,6 +18,172 @@ __global__ void trsm_left_lower_kernel(int m, int n, T alpha, const T* A, T* B) 
             }
             B[row * n + col] = sum / A[row * m + row];
         }
+    }
+}
+
+// 优化版本1: 并行化行处理 - float特化
+__global__ void trsm_left_lower_parallel_kernel_float(int m, int n, float alpha, const float* A, float* B) {
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    
+    if (col < n && row < m) {
+        float sum = alpha * B[row * n + col];
+        
+        // 使用共享内存存储B的列
+        extern __shared__ float shared_B_parallel_data[];
+        int tid = threadIdx.y * blockDim.x + threadIdx.x;
+        int shared_size = blockDim.x * blockDim.y;
+        
+        // 协作加载B的列到共享内存
+        for (int i = 0; i < m; i += shared_size) {
+            int idx = i + tid;
+            if (idx < m) {
+                shared_B_parallel_data[tid] = B[idx * n + col];
+            }
+            __syncthreads();
+            
+            // 计算部分和
+            for (int k = 0; k < blockDim.y && i + k < row; ++k) {
+                int k_idx = i + k;
+                if (k_idx < row) {
+                    sum -= A[row * m + k_idx] * shared_B_parallel_data[k * blockDim.x + threadIdx.x];
+                }
+            }
+            __syncthreads();
+        }
+        
+        B[row * n + col] = sum / A[row * m + row];
+    }
+}
+
+// 优化版本1: 并行化行处理 - double特化
+__global__ void trsm_left_lower_parallel_kernel_double(int m, int n, double alpha, const double* A, double* B) {
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    
+    if (col < n && row < m) {
+        double sum = alpha * B[row * n + col];
+        
+        // 使用共享内存存储B的列
+        extern __shared__ double shared_B_parallel_data_double[];
+        int tid = threadIdx.y * blockDim.x + threadIdx.x;
+        int shared_size = blockDim.x * blockDim.y;
+        
+        // 协作加载B的列到共享内存
+        for (int i = 0; i < m; i += shared_size) {
+            int idx = i + tid;
+            if (idx < m) {
+                shared_B_parallel_data_double[tid] = B[idx * n + col];
+            }
+            __syncthreads();
+            
+            // 计算部分和
+            for (int k = 0; k < blockDim.y && i + k < row; ++k) {
+                int k_idx = i + k;
+                if (k_idx < row) {
+                    sum -= A[row * m + k_idx] * shared_B_parallel_data_double[k * blockDim.x + threadIdx.x];
+                }
+            }
+            __syncthreads();
+        }
+        
+        B[row * n + col] = sum / A[row * m + row];
+    }
+}
+
+// 优化版本2: 分块处理
+template <typename T, int BLOCK_SIZE>
+__global__ void trsm_left_lower_blocked_kernel(int m, int n, T alpha, const T* A, T* B) {
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    
+    if (col < n && row < m) {
+        T sum = alpha * B[row * n + col];
+        
+        // 分块处理
+        for (int block = 0; block < m; block += BLOCK_SIZE) {
+            int block_end = min(block + BLOCK_SIZE, m);
+            
+            // 使用共享内存存储A和B的块
+            __shared__ T shared_A_block[BLOCK_SIZE][BLOCK_SIZE];
+            __shared__ T shared_B_block[BLOCK_SIZE];
+            
+            int tid_x = threadIdx.x;
+            int tid_y = threadIdx.y;
+            
+            // 协作加载A的块
+            if (block + tid_y < m && block + tid_x < m) {
+                shared_A_block[tid_y][tid_x] = A[(block + tid_y) * m + block + tid_x];
+            } else {
+                shared_A_block[tid_y][tid_x] = 0;
+            }
+            
+            // 协作加载B的块
+            if (block + tid_y < m) {
+                shared_B_block[tid_y] = B[(block + tid_y) * n + col];
+            } else {
+                shared_B_block[tid_y] = 0;
+            }
+            
+            __syncthreads();
+            
+            // 计算部分和
+            for (int k = 0; k < BLOCK_SIZE && block + k < row; ++k) {
+                if (block + k < m) {
+                    sum -= shared_A_block[row - block][k] * shared_B_block[k];
+                }
+            }
+            __syncthreads();
+        }
+        
+        B[row * n + col] = sum / A[row * m + row];
+    }
+}
+
+// 优化版本3: 向量化访问
+template <typename T>
+__global__ void trsm_left_lower_vectorized_kernel(int m, int n, T alpha, const T* A, T* B) {
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    
+    if (col < n && row < m) {
+        T sum = alpha * B[row * n + col];
+        
+        // 向量化处理
+        int vec_size = sizeof(T) == 4 ? 4 : 2;
+        int vec_m = (m / vec_size) * vec_size;
+        
+        // 向量化部分
+        for (int k = 0; k < vec_m; k += vec_size) {
+            if (k + vec_size - 1 < row) {
+                if constexpr (std::is_same_v<T, float>) {
+                    const float4* A_vec = reinterpret_cast<const float4*>(A);
+                    const float4* B_vec = reinterpret_cast<const float4*>(B);
+                    float4 a_val = A_vec[row * m / 4 + k / 4];
+                    float4 b_val = B_vec[k * n / 4 + col];
+                    
+                    for (int i = 0; i < 4; ++i) {
+                        sum -= (&a_val.x)[i] * (&b_val.x)[i];
+                    }
+                } else if constexpr (std::is_same_v<T, double>) {
+                    const double2* A_vec = reinterpret_cast<const double2*>(A);
+                    const double2* B_vec = reinterpret_cast<const double2*>(B);
+                    double2 a_val = A_vec[row * m / 2 + k / 2];
+                    double2 b_val = B_vec[k * n / 2 + col];
+                    
+                    for (int i = 0; i < 2; ++i) {
+                        sum -= (&a_val.x)[i] * (&b_val.x)[i];
+                    }
+                }
+            }
+        }
+        
+        // 处理剩余元素
+        for (int k = vec_m; k < row; ++k) {
+            sum -= A[row * m + k] * B[k * n + col];
+        }
+        
+        B[row * n + col] = sum / A[row * m + row];
     }
 }
 
@@ -49,15 +215,43 @@ StatusCode Trsm<T>::Forward(const Tensor<T>& A, Tensor<T>& B) {
     const T* d_A = A.data();
     T* d_B = B.data();
 
-    int threads = 32;
-    int blocks = (n + threads - 1) / threads;
-    trsm_left_lower_kernel<T><<<blocks, threads>>>(m, n, alpha_, d_A, d_B);
+    cudaError_t err = cudaSuccess;
+    
+    // 根据矩阵大小选择最优kernel
+    if (m >= 512 && n >= 512) {
+        // 大矩阵使用分块处理
+        constexpr int BLOCK_SIZE = 32;
+        dim3 threads(16, 16);
+        dim3 blocks((n + 15) / 16, (m + 15) / 16);
+        trsm_left_lower_blocked_kernel<T, BLOCK_SIZE><<<blocks, threads>>>(m, n, alpha_, d_A, d_B);
+    } else if (m >= 128 && n >= 128) {
+        // 中等矩阵使用并行化处理
+        dim3 threads(16, 16);
+        dim3 blocks((n + 15) / 16, (m + 15) / 16);
+        size_t shared_mem_size = 16 * 16 * sizeof(T);
+        if constexpr (std::is_same_v<T, float>) {
+            trsm_left_lower_parallel_kernel_float<<<blocks, threads, shared_mem_size>>>(m, n, alpha_, d_A, d_B);
+        } else if constexpr (std::is_same_v<T, double>) {
+            trsm_left_lower_parallel_kernel_double<<<blocks, threads, shared_mem_size>>>(m, n, alpha_, d_A, d_B);
+        }
+    } else if (m >= 64 && n >= 64) {
+        // 小矩阵使用向量化处理
+        dim3 threads(16, 16);
+        dim3 blocks((n + 15) / 16, (m + 15) / 16);
+        trsm_left_lower_vectorized_kernel<T><<<blocks, threads>>>(m, n, alpha_, d_A, d_B);
+    } else {
+        // 极小矩阵使用基础kernel
+        int threads = 32;
+        int blocks = (n + threads - 1) / threads;
+        trsm_left_lower_kernel<T><<<blocks, threads>>>(m, n, alpha_, d_A, d_B);
+    }
 
-    cudaError_t err = cudaGetLastError();
+    err = cudaGetLastError();
     if (err != cudaSuccess) {
         LOG(ERROR) << "trsm kernel failed: " << cudaGetErrorString(err);
         return StatusCode::CUDA_ERROR;
     }
+    
     VLOG(1) << "Trsm: solve AX = alpha*B, m = " << m << ", n = " << n;
     return StatusCode::SUCCESS;
 }
