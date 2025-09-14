@@ -311,25 +311,83 @@ struct GemmKernelSelector {
         }
         #endif
         
-        // 简单的kernel选择策略
+        // 改进的kernel选择策略
         if (transA || transB) {
-            return GemmKernelType::BASIC;  // 转置情况使用基础kernel
+            // 转置情况根据矩阵大小选择
+            if (m >= 1024 && n >= 1024 && k >= 1024) {
+                return GemmKernelType::BLOCKED;
+            } else if (m >= 256 && n >= 256 && k >= 256) {
+                return GemmKernelType::WARP_OPTIMIZED;
+            } else {
+                return GemmKernelType::TILED;
+            }
         }
+        
+        // 计算矩阵大小指标
+        int matrix_size = m * n * k;
+        int min_dim = std::min({m, n, k});
+        int max_dim = std::max({m, n, k});
         
         // Tensor Core优先（如果支持且矩阵足够大）
         if (tensor_core_supported && m >= 256 && n >= 256 && k >= 256) {
-            return GemmKernelType::TENSOR_CORE;
+            // 对于Tensor Core，确保矩阵维度是16的倍数
+            if (m % 16 == 0 && n % 16 == 0 && k % 16 == 0) {
+                return GemmKernelType::TENSOR_CORE;
+            }
         }
         
-        if (m >= 1024 && n >= 1024 && k >= 1024) {
-            return GemmKernelType::BLOCKED;  // 大矩阵使用分块优化
+        // 超大矩阵使用分块优化
+        if (matrix_size >= 1024 * 1024 * 1024 || (m >= 2048 && n >= 2048 && k >= 2048)) {
+            return GemmKernelType::BLOCKED;
         }
         
-        if (m >= 256 && n >= 256 && k >= 256) {
-            return GemmKernelType::WARP_OPTIMIZED;  // 中等矩阵使用warp优化
+        // 大矩阵使用warp优化
+        if (matrix_size >= 64 * 1024 * 1024 || (m >= 512 && n >= 512 && k >= 512)) {
+            return GemmKernelType::WARP_OPTIMIZED;
         }
         
-        return GemmKernelType::TILED;  // 小矩阵使用tile优化
+        // 中等矩阵使用tile优化
+        if (matrix_size >= 1024 * 1024 || (m >= 128 && n >= 128 && k >= 128)) {
+            return GemmKernelType::TILED;
+        }
+        
+        // 小矩阵使用基础kernel
+        return GemmKernelType::BASIC;
+    }
+    
+    // 动态调整block和thread配置
+    static void GetOptimalConfig(int m, int n, int k, GemmKernelType kernel_type, 
+                                dim3& blocks, dim3& threads) {
+        switch (kernel_type) {
+            case GemmKernelType::BASIC: {
+                threads = dim3(16, 16);
+                blocks = dim3((n + 15) / 16, (m + 15) / 16);
+                break;
+            }
+            case GemmKernelType::TILED: {
+                constexpr int TILE_SIZE = 16;
+                threads = dim3(TILE_SIZE, TILE_SIZE);
+                blocks = dim3((n + TILE_SIZE - 1) / TILE_SIZE, (m + TILE_SIZE - 1) / TILE_SIZE);
+                break;
+            }
+            case GemmKernelType::WARP_OPTIMIZED: {
+                constexpr int TILE_SIZE = 32;
+                threads = dim3(TILE_SIZE, TILE_SIZE);
+                blocks = dim3((n + TILE_SIZE - 1) / TILE_SIZE, (m + TILE_SIZE - 1) / TILE_SIZE);
+                break;
+            }
+            case GemmKernelType::BLOCKED: {
+                constexpr int BLOCK_SIZE = 32;
+                threads = dim3(BLOCK_SIZE, BLOCK_SIZE);
+                blocks = dim3((n + BLOCK_SIZE - 1) / BLOCK_SIZE, (m + BLOCK_SIZE - 1) / BLOCK_SIZE);
+                break;
+            }
+            case GemmKernelType::TENSOR_CORE: {
+                threads = dim3(32, 8);  // 4 warps per block
+                blocks = dim3((n + 15) / 16, (m + 15) / 16);
+                break;
+            }
+        }
     }
 };
 
@@ -374,11 +432,13 @@ StatusCode Gemm<T>::Forward(const Tensor<T>& input, Tensor<T>& output) {
     GemmKernelType kernel_type = GemmKernelSelector<T>::SelectKernel(m, n, k, transA_, transB_);
     
     cudaError_t err = cudaSuccess;
+    dim3 threads, blocks;
+    
+    // 获取最优配置
+    GemmKernelSelector<T>::GetOptimalConfig(m, n, k, kernel_type, blocks, threads);
     
     switch (kernel_type) {
         case GemmKernelType::BASIC: {
-            dim3 threads(16, 16);
-            dim3 blocks((n + 15) / 16, (m + 15) / 16);
             cu_op_mem::gemm_kernel_basic<T><<<blocks, threads>>>(
                 m, n, k, alpha_, d_A, d_B, beta_, d_C, 
                 transA_, transB_, k, n, n
@@ -388,8 +448,6 @@ StatusCode Gemm<T>::Forward(const Tensor<T>& input, Tensor<T>& output) {
         
         case GemmKernelType::TILED: {
             constexpr int TILE_SIZE = 16;
-            dim3 threads(TILE_SIZE, TILE_SIZE);
-            dim3 blocks((n + TILE_SIZE - 1) / TILE_SIZE, (m + TILE_SIZE - 1) / TILE_SIZE);
             cu_op_mem::gemm_kernel_tiled<T, TILE_SIZE><<<blocks, threads>>>(
                 m, n, k, alpha_, d_A, d_B, beta_, d_C
             );
@@ -398,8 +456,6 @@ StatusCode Gemm<T>::Forward(const Tensor<T>& input, Tensor<T>& output) {
         
         case GemmKernelType::WARP_OPTIMIZED: {
             constexpr int TILE_SIZE = 32;  // Warp size
-            dim3 threads(TILE_SIZE, TILE_SIZE);
-            dim3 blocks((n + TILE_SIZE - 1) / TILE_SIZE, (m + TILE_SIZE - 1) / TILE_SIZE);
             cu_op_mem::gemm_kernel_warp_optimized<T, TILE_SIZE><<<blocks, threads>>>(
                 m, n, k, alpha_, d_A, d_B, beta_, d_C
             );
@@ -408,8 +464,6 @@ StatusCode Gemm<T>::Forward(const Tensor<T>& input, Tensor<T>& output) {
         
         case GemmKernelType::BLOCKED: {
             constexpr int BLOCK_SIZE = 32;
-            dim3 threads(BLOCK_SIZE, BLOCK_SIZE);
-            dim3 blocks((n + BLOCK_SIZE - 1) / BLOCK_SIZE, (m + BLOCK_SIZE - 1) / BLOCK_SIZE);
             cu_op_mem::gemm_kernel_blocked<T, BLOCK_SIZE><<<blocks, threads>>>(
                 m, n, k, alpha_, d_A, d_B, beta_, d_C
             );
@@ -420,8 +474,6 @@ StatusCode Gemm<T>::Forward(const Tensor<T>& input, Tensor<T>& output) {
             #if __CUDA_ARCH__ >= 700
             if (std::is_same<T, half>::value) {
                 // FP16 Tensor Core
-                dim3 threads(32, 8);  // 4 warps per block
-                dim3 blocks((n + 15) / 16, (m + 15) / 16);
                 gemm_kernel_tensor_core_fp16<<<blocks, threads>>>(
                     m, n, k, static_cast<half>(alpha_), 
                     reinterpret_cast<const half*>(d_A), 
