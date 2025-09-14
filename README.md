@@ -353,6 +353,8 @@ cuop.synchronize()
 
 ## 📚 文档
 
+- **算子库概览**: 算子库总体概览请参考 [docs/OPERATORS_OVERVIEW.md](docs/OPERATORS_OVERVIEW.md)
+- **BLAS算子详解**: 线性代数算子完整文档请参考 [docs/BLAS_OPERATORS.md](docs/BLAS_OPERATORS.md)
 - **DNN算子详解**: 深度学习算子完整文档请参考 [docs/DNN_OPERATORS.md](docs/DNN_OPERATORS.md)
 - **JIT系统**: 详细文档请参考 [src/jit/jit_docs.md](src/jit/jit_docs.md)
 - **持久化缓存**: 使用指南请参考 [docs/jit_persistent_cache_guide.md](docs/jit_persistent_cache_guide.md)
