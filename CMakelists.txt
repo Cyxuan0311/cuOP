@@ -62,6 +62,11 @@ set(JIT_SRC
     src/jit/Blas/gemm_jit_plugin.cu
     src/jit/Blas/gemv_jit_plugin.cu
     src/jit/Blas/trsm_jit_plugin.cu
+    src/jit/Blas/gemm_batched_jit_plugin.cu
+    src/jit/Blas/symm_herk_jit_plugin.cu
+    src/jit/Blas/vector_ops_jit_plugin.cu
+    src/jit/Blas/trmm_jit_plugin.cu
+    src/jit/Blas/ger_jit_plugin.cu
     src/jit/Blas/blas_jit_plugin_manager.cu
 )
 
