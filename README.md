@@ -15,7 +15,7 @@
 
 ## 🚀 主要特性
 
-- **🚀 高性能CUDA算子**: 支持GEMM、GEMV、ReLU、Softmax、MatMul等常用算子
+- **🚀 高性能CUDA算子**: 支持GEMM、GEMV、Batched GEMM、SYMM、HERK、TRMM、GER、DOT、AXPY等完整BLAS算子集
 - **⚡ JIT实时编译**: 智能包装器模式，零侵入性的运行时内核优化，支持自动调优和硬件特性利用
 - **💾 持久化缓存**: 编译结果持久化，显著提升重复使用性能（25x-67x加速）
 - **🧠 智能内存管理**: 多级缓存、内存碎片整理、智能预分配，减少频繁 cudaMalloc/cudaFree 带来的性能损耗
@@ -42,7 +42,15 @@ cuOP/
 │       ├── ijit_plugin.hpp     # JIT插件接口
 │       ├── jit_compiler.hpp    # JIT编译器
 │       ├── jit_wrapper.hpp     # 智能包装器
-│       └── jit_persistent_cache.hpp # 持久化缓存系统
+│       ├── jit_persistent_cache.hpp # 持久化缓存系统
+│       └── Blas/               # BLAS JIT插件
+│           ├── blas_jit_plugins.hpp      # BLAS插件统一入口
+│           ├── gemm_jit_plugin.hpp       # GEMM JIT插件
+│           ├── gemm_batched_jit_plugin.hpp # Batched GEMM JIT插件
+│           ├── symm_herk_jit_plugin.hpp  # 对称矩阵运算JIT插件
+│           ├── vector_ops_jit_plugin.hpp # 向量运算JIT插件
+│           ├── trmm_jit_plugin.hpp       # TRMM JIT插件
+│           └── ger_jit_plugin.hpp        # GER JIT插件
 ├── src/                    # 源码实现
 │   ├── base/               # 内存池等实现
 │   ├── cuda_op/            # CUDA 算子实现
@@ -52,7 +60,15 @@ cuOP/
 │       ├── jit_compiler.cu         # JIT编译器实现
 │       ├── global_jit_manager.cu   # 全局JIT管理器
 │       ├── jit_persistent_cache.cu # 持久化缓存实现
-│       └── jit_docs.md             # JIT系统文档
+│       ├── jit_docs.md             # JIT系统文档
+│       └── Blas/                   # BLAS JIT插件实现
+│           ├── gemm_jit_plugin.cu          # GEMM JIT插件实现
+│           ├── gemm_batched_jit_plugin.cu  # Batched GEMM JIT插件实现
+│           ├── symm_herk_jit_plugin.cu     # 对称矩阵运算JIT插件实现
+│           ├── vector_ops_jit_plugin.cu    # 向量运算JIT插件实现
+│           ├── trmm_jit_plugin.cu          # TRMM JIT插件实现
+│           ├── ger_jit_plugin.cu           # GER JIT插件实现
+│           └── blas_jit_plugin_manager.cu  # BLAS插件管理器
 ├── python/                 # Python API接口
 │   ├── setup.py            # Python包构建配置
 │   ├── requirements.txt    # Python依赖包列表
@@ -315,7 +331,8 @@ cuop.synchronize()
 - **持久化缓存**: 编译结果持久化，重复使用性能提升25x-67x
 
 ### 📊 **算子支持**
-- **cuBLAS**: GEMM、GEMV等高性能BLAS算子
+- **cuBLAS**: GEMM、GEMV、Batched GEMM、SYMM、HERK、SYRK、HER2K、SYR2K、TRMM、GER等完整BLAS算子集
+- **向量运算**: DOT、AXPY、SCAL、COPY、SWAP、ROT、NRM2、ASUM、IAMAX、IAMIN等高性能向量运算
 - **cuDNN**: Conv、Pool、ReLU等深度学习算子
 - **扩展性**: 插件化架构，易于添加新算子
 
@@ -355,6 +372,8 @@ cuop.synchronize()
 
 - **算子库概览**: 算子库总体概览请参考 [docs/OPERATORS_OVERVIEW.md](docs/OPERATORS_OVERVIEW.md)
 - **BLAS算子详解**: 线性代数算子完整文档请参考 [docs/BLAS_OPERATORS.md](docs/BLAS_OPERATORS.md)
+- **BLAS JIT API**: BLAS JIT系统API文档请参考 [docs/BLAS_JIT_API.md](docs/BLAS_JIT_API.md)
+- **BLAS JIT示例**: BLAS JIT使用示例请参考 [docs/BLAS_JIT_EXAMPLES.md](docs/BLAS_JIT_EXAMPLES.md)
 - **DNN算子详解**: 深度学习算子完整文档请参考 [docs/DNN_OPERATORS.md](docs/DNN_OPERATORS.md)
 - **JIT系统**: 详细文档请参考 [src/jit/jit_docs.md](src/jit/jit_docs.md)
 - **持久化缓存**: 使用指南请参考 [docs/jit_persistent_cache_guide.md](docs/jit_persistent_cache_guide.md)
@@ -414,7 +433,9 @@ make test
 - [x] 持久化缓存优化
 - [x] Python API接口
 - [x] 错误码系统优化
-- [ ] 更多算子支持
+- [x] 完整BLAS算子集支持
+- [x] 向量运算算子支持
+- [x] 批量矩阵运算支持
 - [ ] 分布式计算支持
 - [ ] 更多硬件架构支持
 - [ ] 性能监控和调优工具
