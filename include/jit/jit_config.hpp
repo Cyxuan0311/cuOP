@@ -29,11 +29,14 @@ struct JITConfig {
     int num_stages = 2;                        // 流水线阶段数
     bool use_tensor_core = true;               // 使用Tensor Core
     int block_size = 256;                      // 默认块大小
+    int block_size_x = 16;                     // X方向块大小
+    int block_size_y = 16;                     // Y方向块大小
     std::string kernel_type = "default";       // 内核类型
     bool use_tma = true;                       // 使用TMA
     std::string optimization_level = "auto";   // 优化级别: "auto", "fast", "best"
     int max_registers = 255;                   // 最大寄存器数
     bool enable_shared_memory_opt = true;      // 共享内存优化
+    bool use_shared_memory = true;             // 使用共享内存
     bool enable_loop_unroll = true;            // 循环展开
     bool enable_memory_coalescing = true;      // 内存合并优化
     int tile_size = 16;                        // 瓦片大小
@@ -95,6 +98,7 @@ struct PerformanceProfile {
     std::string kernel_type = "";              // 内核类型
     double throughput = 0.0;                   // 吞吐量
     std::vector<int> matrix_size = {0, 0, 0};  // 矩阵大小
+    size_t memory_usage = 0;                   // 内存使用量 (字节)
     
     // 计算总时间
     double GetTotalTime() const {
