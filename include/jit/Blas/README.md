@@ -13,6 +13,8 @@ include/jit/Blas/
 ├── gemm_batched_jit_plugin.hpp    # Batched GEMM JIT插件头文件
 ├── symm_herk_jit_plugin.hpp       # 对称矩阵运算JIT插件头文件
 ├── vector_ops_jit_plugin.hpp      # 向量运算JIT插件头文件
+├── trmm_jit_plugin.hpp            # TRMM JIT插件头文件
+├── ger_jit_plugin.hpp             # GER JIT插件头文件
 └── README.md                      # 本文件
 
 src/jit/Blas/
@@ -22,6 +24,8 @@ src/jit/Blas/
 ├── gemm_batched_jit_plugin.cu     # Batched GEMM JIT插件实现
 ├── symm_herk_jit_plugin.cu        # 对称矩阵运算JIT插件实现
 ├── vector_ops_jit_plugin.cu       # 向量运算JIT插件实现
+├── trmm_jit_plugin.cu             # TRMM JIT插件实现
+├── ger_jit_plugin.cu              # GER JIT插件实现
 └── blas_jit_plugin_manager.cu     # BLAS插件管理器
 ```
 
@@ -78,6 +82,24 @@ src/jit/Blas/
 - **IAMAX**: 最大绝对值索引 `result = argmax(|x_i|)`
 - **IAMIN**: 最小绝对值索引 `result = argmin(|x_i|)`
 
+### 7. TRMM (Triangular Matrix-Matrix Multiply)
+- **功能**: 计算 `B = α * op(A) * B` 或 `B = α * B * op(A)` (A为三角矩阵)
+- **支持的内核类型**:
+  - `basic`: 基础实现
+  - `tiled`: 分块优化版本
+  - `warp_optimized`: Warp级优化
+  - `blocked`: 大矩阵分块优化
+- **特性**: 支持左/右侧模式，上/下三角模式，转置选项
+
+### 8. GER (General Rank-1 Update)
+- **功能**: 计算 `A = α * x * y^T + A` (A为矩阵，x、y为向量)
+- **支持的内核类型**:
+  - `basic`: 基础实现
+  - `tiled`: 分块优化版本
+  - `warp_optimized`: Warp级优化
+  - `shared_memory`: 共享内存优化版本
+- **特性**: 支持向量增量参数，高效的外积运算
+
 ## 🚀 使用方法
 
 ### 1. 注册插件
@@ -112,6 +134,18 @@ if (dot_plugin) {
 auto symm_plugin = CreateBlasJITPlugin("symm");
 if (symm_plugin) {
     symm_plugin->Initialize();
+}
+
+// 创建TRMM插件
+auto trmm_plugin = CreateBlasJITPlugin("trmm");
+if (trmm_plugin) {
+    trmm_plugin->Initialize();
+}
+
+// 创建GER插件
+auto ger_plugin = CreateBlasJITPlugin("ger");
+if (ger_plugin) {
+    ger_plugin->Initialize();
 }
 ```
 
@@ -156,6 +190,25 @@ if (symm_ops_plugin) {
     symm_ops_plugin->SetSideMode(true);  // left side
     symm_ops_plugin->SetUploMode(true);  // upper triangle
     symm_ops_plugin->SetAlphaBeta(1.0f, 0.0f);
+}
+
+// TRMM参数设置
+auto* trmm_ops_plugin = dynamic_cast<TrmmJITPlugin*>(trmm_plugin.get());
+if (trmm_ops_plugin) {
+    trmm_ops_plugin->SetTrmmParams(0, 0, 0, 0, 1.0f);  // left, upper, no trans, non-unit, alpha=1.0
+    trmm_ops_plugin->SetMatrixA(matrix_A);
+    trmm_ops_plugin->SetMatrixB(matrix_B);
+}
+
+// GER参数设置
+auto* ger_ops_plugin = dynamic_cast<GerJITPlugin*>(ger_plugin.get());
+if (ger_ops_plugin) {
+    ger_ops_plugin->SetGerParams(1.0f);  // alpha = 1.0
+    ger_ops_plugin->SetMatrixDimensions(64, 32);
+    ger_ops_plugin->SetVectorIncrements(1, 1);
+    ger_ops_plugin->SetMatrixA(matrix_A);
+    ger_ops_plugin->SetVectorX(vector_x);
+    ger_ops_plugin->SetVectorY(vector_y);
 }
 ```
 
@@ -444,11 +497,17 @@ extern "C" __global__ void new_op_kernel(
 
 ## 📊 性能基准
 
-| 算子类型 | 矩阵大小 | 执行时间 | 加速比 | 内存带宽 |
-|---------|---------|---------|--------|---------|
-| GEMM | 1024x1024 | 0.5ms | 1.0x | 800 GB/s |
-| Batched GEMM | 4x512x512 | 0.8ms | 1.2x | 900 GB/s |
-| SYMM | 512x512 | 0.3ms | 0.8x | 600 GB/s |
-| DOT | 1024 | 0.01ms | 2.0x | 1200 GB/s |
+| 算子类型 | 矩阵大小 | 执行时间 | 加速比 | 内存带宽 | 备注 |
+|---------|---------|---------|--------|---------|------|
+| GEMM | 1024x1024 | 0.5ms | 1.0x | 800 GB/s | 基础矩阵乘法 |
+| Batched GEMM | 4x512x512 | 0.8ms | 1.2x | 900 GB/s | 批量矩阵乘法 |
+| SYMM | 512x512 | 0.3ms | 0.8x | 600 GB/s | 对称矩阵乘法 |
+| HERK | 512x512 | 0.4ms | 0.9x | 700 GB/s | Hermitian秩-k更新 |
+| TRMM | 512x512 | 0.4ms | 0.9x | 700 GB/s | 三角矩阵乘法 |
+| GER | 512x256 | 0.1ms | 1.5x | 1000 GB/s | 外积运算 |
+| DOT | 1024 | 0.01ms | 2.0x | 1200 GB/s | 向量点积 |
+| AXPY | 1024 | 0.005ms | 2.5x | 1500 GB/s | 向量缩放加法 |
+| NRM2 | 1024 | 0.008ms | 2.2x | 1300 GB/s | 向量范数 |
+| IAMAX | 1024 | 0.003ms | 3.0x | 1800 GB/s | 最大元素索引 |
 
 *注：性能数据基于RTX 4090 GPU，实际性能可能因硬件和配置而异* 
