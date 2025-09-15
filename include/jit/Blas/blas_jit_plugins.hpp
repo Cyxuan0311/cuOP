@@ -7,6 +7,11 @@
 #include "jit/Blas/gemm_jit_plugin.hpp"
 #include "jit/Blas/gemv_jit_plugin.hpp"
 #include "jit/Blas/trsm_jit_plugin.hpp"
+#include "jit/Blas/gemm_batched_jit_plugin.hpp"
+#include "jit/Blas/symm_herk_jit_plugin.hpp"
+#include "jit/Blas/vector_ops_jit_plugin.hpp"
+#include "jit/Blas/trmm_jit_plugin.hpp"
+#include "jit/Blas/ger_jit_plugin.hpp"
 #include <unordered_map>
 #include <functional>
 #include <memory>
