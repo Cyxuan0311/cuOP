@@ -8,45 +8,31 @@ template <typename T>
 __global__ void averagepool2D_kernel(const T* input, T* output, int input_height, int input_width, int output_height,
                                      int output_width, int pool_height, int pool_width, int stride_height,
                                      int stride_width) {
-    // 共享内存块大小配置 (32x32)
-    constexpr int TILE_DIM   = 32;
-    constexpr int BLOCK_ROWS = 8;
-    __shared__ T shared_block[TILE_DIM][TILE_DIM];
-
-    const int output_x = blockIdx.x * TILE_DIM + threadIdx.x;
-    const int output_y = blockIdx.y * TILE_DIM + threadIdx.y;
+    int output_x = blockIdx.x * blockDim.x + threadIdx.x;
+    int output_y = blockIdx.y * blockDim.y + threadIdx.y;
 
     if (output_x >= output_width || output_y >= output_height) return;
 
-    const int input_x_start = output_x * stride_width;
-    const int input_y_start = output_y * stride_height;
-    const int input_x_end = min(input_x_start + pool_width, input_width);
-    const int input_y_end = min(input_y_start + pool_height, input_height);
+    int input_x_start = output_x * stride_width;
+    int input_y_start = output_y * stride_height;
+    int input_x_end = min(input_x_start + pool_width, input_width);
+    int input_y_end = min(input_y_start + pool_height, input_height);
 
     T sum = 0;
     int count = 0;
-    for (int y = input_y_start; y < input_y_end; y += BLOCK_ROWS) {
-        for (int x = input_x_start; x < input_x_end; x += TILE_DIM) {
-            const int load_x = x + threadIdx.x;
-            const int load_y = y + threadIdx.y;
-            if (load_x < input_width && load_y < input_height) {
-                shared_block[threadIdx.y][threadIdx.x] = input[load_y * input_width + load_x];
-            } else {
-                shared_block[threadIdx.y][threadIdx.x] = 0;
-            }
-            __syncthreads();
-            const int search_height = min(BLOCK_ROWS, input_y_end - y);
-            const int search_width  = min(TILE_DIM, input_x_end - x);
-            for (int i = 0; i < search_height; ++i) {
-                for (int j = 0; j < search_width; ++j) {
-                    sum += shared_block[i][j];
-                    ++count;
-                }
-            }
-            __syncthreads();
+    
+    for (int y = input_y_start; y < input_y_end; y++) {
+        for (int x = input_x_start; x < input_x_end; x++) {
+            sum += input[y * input_width + x];
+            count++;
         }
     }
-    output[output_y * output_width + output_x] = sum / (T)count;
+    
+    if (count > 0) {
+        output[output_y * output_width + output_x] = sum / (T)count;
+    } else {
+        output[output_y * output_width + output_x] = 0;
+    }
 }
 
 template <typename T>

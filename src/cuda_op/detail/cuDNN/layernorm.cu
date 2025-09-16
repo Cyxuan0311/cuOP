@@ -7,12 +7,14 @@ namespace cu_op_mem {
 
 // Warp级别归约函数
 __device__ __forceinline__ void warpReduceSum(float& val) {
+    const int warpSize = 32; // 硬编码warp大小
     for (int offset = warpSize / 2; offset > 0; offset /= 2) {
         val += __shfl_down_sync(0xffffffff, val, offset);
     }
 }
 
 __device__ __forceinline__ void warpReduceSum(double& val) {
+    const int warpSize = 32; // 硬编码warp大小
     for (int offset = warpSize / 2; offset > 0; offset /= 2) {
         val += __shfl_down_sync(0xffffffff, val, offset);
     }
@@ -24,6 +26,7 @@ __global__ void layernorm_forward_optimized_kernel_float(const float* input, flo
                                                         int batch, int norm_size, int norm_stride, float eps) {
     int row = blockIdx.x;
     int tid = threadIdx.x;
+    const int warpSize = 32;
     int lane = tid % warpSize;
     int warp_id = tid / warpSize;
     if (row >= batch) return;
@@ -87,6 +90,7 @@ __global__ void layernorm_forward_optimized_kernel_double(const double* input, d
                                                          int batch, int norm_size, int norm_stride, double eps) {
     int row = blockIdx.x;
     int tid = threadIdx.x;
+    const int warpSize = 32;
     int lane = tid % warpSize;
     int warp_id = tid / warpSize;
     if (row >= batch) return;
@@ -166,6 +170,7 @@ StatusCode LayerNorm<T>::Forward(const Tensor<T>& input, Tensor<T>& output,
     int threads = 256;
     int blocks = batch;
     // 减少共享内存使用，只存储warp级别的结果
+    const int warpSize = 32;
     size_t shared_mem = ((threads + warpSize - 1) / warpSize) * 2 * sizeof(T);
     
     // 根据类型调用相应的优化kernel函数
