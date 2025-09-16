@@ -72,13 +72,12 @@ cuOP/
 ├── python/                 # Python API接口
 │   ├── setup.py            # Python包构建配置
 │   ├── requirements.txt    # Python依赖包列表
-│   ├── README.md           # Python API使用文档
 │   ├── cuop/               # Python包源码
 │   │   ├── __init__.py     # 主包初始化文件
 │   │   └── core.cpp        # 核心Python绑定
 │   └── examples/           # Python使用示例
-│       ├── basic_usage.py      # 基本使用示例
-│       └── advanced_usage.py   # 高级功能示例
+│       ├── quick_start.py      # 快速开始示例
+│       └── complete_operator_demo.py   # 完整算子演示
 ├── bench/                  # 性能基准测试
 │   ├── cuBlas/             # BLAS 算子基准
 │   │   ├── gemm/           # GEMM 性能测试
@@ -95,7 +94,12 @@ cuOP/
 │       ├── test_status_code.cpp    # 错误码系统测试
 │       └── CMakeLists.txt          # 工具测试构建配置
 ├── docs/                   # 项目文档
-│   ├── DNN_OPERATORS.md    # DNN算子详解文档
+│   ├── OPERATORS_OVERVIEW.md    # 算子库概览
+│   ├── BLAS_OPERATORS.md        # BLAS算子详解文档
+│   ├── BLAS_JIT_API.md          # BLAS JIT API文档
+│   ├── BLAS_JIT_EXAMPLES.md     # BLAS JIT使用示例
+│   ├── DNN_OPERATORS.md         # DNN算子详解文档
+│   ├── PYTHON_API.md            # Python API使用文档
 │   ├── jit_persistent_cache_guide.md # JIT持久化缓存使用指南
 │   └── performance_monitoring_guide.md # 性能监控指南
 ├── third_party/            # 第三方依赖
@@ -378,7 +382,7 @@ cuop.synchronize()
 - **JIT系统**: 详细文档请参考 [src/jit/jit_docs.md](src/jit/jit_docs.md)
 - **持久化缓存**: 使用指南请参考 [docs/jit_persistent_cache_guide.md](docs/jit_persistent_cache_guide.md)
 - **性能监控**: 性能分析和优化指南请参考 [docs/performance_monitoring_guide.md](docs/performance_monitoring_guide.md)
-- **Python API**: 完整文档请参考 [python/README.md](python/README.md)
+- **Python API**: 完整文档请参考 [docs/PYTHON_API.md](docs/PYTHON_API.md)
 - **内存池管理**: 内存池优化指南请参考 [src/base/README_memory_pool.md](src/base/README_memory_pool.md)
 - **错误码系统**: 参考 [include/util/status_code.hpp](include/util/status_code.hpp)
 
