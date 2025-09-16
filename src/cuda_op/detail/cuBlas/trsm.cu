@@ -200,20 +200,30 @@ void Trsm<T>::SetAlpha(T alpha) {
 }
 
 template <typename T>
-StatusCode Trsm<T>::Forward(const Tensor<T>& A, Tensor<T>& B) {
+void Trsm<T>::SetMatrixA(const Tensor<T>& A) {
+    // 由于Tensor的赋值操作符被删除，我们需要手动复制数据
+    matrix_A_ = Tensor<T>(A.shape());
+    cudaMemcpy(matrix_A_.data(), A.data(), A.bytes(), cudaMemcpyDeviceToDevice);
+}
+
+template <typename T>
+StatusCode Trsm<T>::Forward(const Tensor<T>& input, Tensor<T>& output) {
     // 这里只实现最常用的左下三角非单位对角，非转置
     if (side_ != 0 || uplo_ != 1 || trans_ != 0 || diag_ != 0) {
         LOG(ERROR) << "Trsm: only left, lower, non-trans, non-unit supported in kernel";
         return StatusCode::UNSUPPORTED_TYPE;
     }
-    int m = static_cast<int>(A.shape()[0]);
-    int n = static_cast<int>(B.shape()[1]);
-    if (A.shape()[0] != A.shape()[1] || B.shape()[0] != m) {
+    int m = static_cast<int>(matrix_A_.shape()[0]);
+    int n = static_cast<int>(input.shape()[1]);
+    if (matrix_A_.shape()[0] != matrix_A_.shape()[1] || input.shape()[0] != m) {
         LOG(ERROR) << "Trsm: shape mismatch";
         return StatusCode::SHAPE_MISMATCH;
     }
-    const T* d_A = A.data();
-    T* d_B = B.data();
+    const T* d_A = matrix_A_.data();
+    T* d_B = output.data();
+    
+    // 复制input到output
+    cudaMemcpy(output.data(), input.data(), input.bytes(), cudaMemcpyDeviceToDevice);
 
     cudaError_t err = cudaSuccess;
     
