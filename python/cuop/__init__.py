@@ -42,16 +42,40 @@ try:
         # Tensor类
         TensorFloat, TensorDouble, TensorInt,
         
-        # 基础算子
+        # cuBlas算子
+        ScalFloat, ScalDouble,
+        AxpyFloat, AxpyDouble,
+        CopyFloat, CopyDouble,
+        DotFloat, DotDouble,
         GemmFloat, GemmDouble,
         GemvFloat, GemvDouble,
+        SymmFloat, SymmDouble,
+        TrsmFloat, TrsmDouble,
+        
+        # cuDNN算子
         ReluFloat, ReluDouble,
         SoftmaxFloat, SoftmaxDouble,
+        BatchNormFloat, BatchNormDouble,
+        LayerNormFloat, LayerNormDouble,
+        Convolution2DFloat, Convolution2DDouble,
         MatMulFloat, MatMulDouble,
+        BatchMatMulFloat, BatchMatMulDouble,
+        FlattenFloat, FlattenDouble,
+        ViewFloat, ViewDouble,
+        MaxPool2DFloat, MaxPool2DDouble,
+        AveragePool2DFloat, AveragePool2DDouble,
+        GlobalMaxPool2DFloat, GlobalMaxPool2DDouble,
+        GlobalAveragePool2DFloat, GlobalAveragePool2DDouble,
         
         # JIT包装器
         JITGemmFloat, JITGemmDouble,
         JITGemvFloat, JITGemvDouble,
+        JITReluFloat, JITReluDouble,
+        JITSoftmaxFloat, JITSoftmaxDouble,
+        JITBatchNormFloat, JITBatchNormDouble,
+        JITLayerNormFloat, JITLayerNormDouble,
+        JITConvolution2DFloat, JITConvolution2DDouble,
+        JITMatMulFloat, JITMatMulDouble,
         
         # JIT配置
         JITConfig, GlobalJITConfig,
@@ -70,13 +94,41 @@ try:
     
     # 便捷别名
     Tensor = TensorFloat  # 默认使用float类型
+    
+    # cuBlas算子别名
+    Scal = ScalFloat
+    Axpy = AxpyFloat
+    Copy = CopyFloat
+    Dot = DotFloat
     Gemm = GemmFloat
     Gemv = GemvFloat
+    Symm = SymmFloat
+    Trsm = TrsmFloat
+    
+    # cuDNN算子别名
     Relu = ReluFloat
     Softmax = SoftmaxFloat
+    BatchNorm = BatchNormFloat
+    LayerNorm = LayerNormFloat
+    Convolution2D = Convolution2DFloat
     MatMul = MatMulFloat
+    BatchMatMul = BatchMatMulFloat
+    Flatten = FlattenFloat
+    View = ViewFloat
+    MaxPool2D = MaxPool2DFloat
+    AveragePool2D = AveragePool2DFloat
+    GlobalMaxPool2D = GlobalMaxPool2DFloat
+    GlobalAveragePool2D = GlobalAveragePool2DFloat
+    
+    # JIT包装器别名
     JITGemm = JITGemmFloat
     JITGemv = JITGemvFloat
+    JITRelu = JITReluFloat
+    JITSoftmax = JITSoftmaxFloat
+    JITBatchNorm = JITBatchNormFloat
+    JITLayerNorm = JITLayerNormFloat
+    JITConvolution2D = JITConvolution2DFloat
+    JITMatMul = JITMatMulFloat
     
     # 标记导入成功
     _import_success = True
@@ -105,13 +157,41 @@ except ImportError as e:
     
     # 设置占位符
     Tensor = _Placeholder
+    
+    # cuBlas算子占位符
+    Scal = _Placeholder
+    Axpy = _Placeholder
+    Copy = _Placeholder
+    Dot = _Placeholder
     Gemm = _Placeholder
     Gemv = _Placeholder
+    Symm = _Placeholder
+    Trsm = _Placeholder
+    
+    # cuDNN算子占位符
     Relu = _Placeholder
     Softmax = _Placeholder
+    BatchNorm = _Placeholder
+    LayerNorm = _Placeholder
+    Convolution2D = _Placeholder
     MatMul = _Placeholder
+    BatchMatMul = _Placeholder
+    Flatten = _Placeholder
+    View = _Placeholder
+    MaxPool2D = _Placeholder
+    AveragePool2D = _Placeholder
+    GlobalMaxPool2D = _Placeholder
+    GlobalAveragePool2D = _Placeholder
+    
+    # JIT包装器占位符
     JITGemm = _Placeholder
     JITGemv = _Placeholder
+    JITRelu = _Placeholder
+    JITSoftmax = _Placeholder
+    JITBatchNorm = _Placeholder
+    JITLayerNorm = _Placeholder
+    JITConvolution2D = _Placeholder
+    JITMatMul = _Placeholder
 
 # 检查CUDA可用性
 def is_cuda_available():
@@ -310,7 +390,7 @@ def create_jit_operator(operator_type, dtype='float32', **kwargs):
     """创建JIT优化的算子
     
     Args:
-        operator_type: 算子类型 ('gemm', 'gemv', 'relu', 'softmax', 'matmul')
+        operator_type: 算子类型 ('gemm', 'gemv', 'relu', 'softmax', 'matmul', 'batchnorm', 'layernorm', 'convolution2d')
         dtype: 数据类型
         **kwargs: JIT配置参数
     
@@ -340,6 +420,66 @@ def create_jit_operator(operator_type, dtype='float32', **kwargs):
             jit_op = JITGemvDouble(base_op)
         else:
             raise ValueError(f"Unsupported dtype for GEMV: {dtype}")
+    
+    elif operator_type.lower() == 'relu':
+        if dtype == 'float32':
+            base_op = ReluFloat()
+            jit_op = JITReluFloat(base_op)
+        elif dtype == 'float64':
+            base_op = ReluDouble()
+            jit_op = JITReluDouble(base_op)
+        else:
+            raise ValueError(f"Unsupported dtype for ReLU: {dtype}")
+    
+    elif operator_type.lower() == 'softmax':
+        if dtype == 'float32':
+            base_op = SoftmaxFloat()
+            jit_op = JITSoftmaxFloat(base_op)
+        elif dtype == 'float64':
+            base_op = SoftmaxDouble()
+            jit_op = JITSoftmaxDouble(base_op)
+        else:
+            raise ValueError(f"Unsupported dtype for Softmax: {dtype}")
+    
+    elif operator_type.lower() == 'matmul':
+        if dtype == 'float32':
+            base_op = MatMulFloat()
+            jit_op = JITMatMulFloat(base_op)
+        elif dtype == 'float64':
+            base_op = MatMulDouble()
+            jit_op = JITMatMulDouble(base_op)
+        else:
+            raise ValueError(f"Unsupported dtype for MatMul: {dtype}")
+    
+    elif operator_type.lower() == 'batchnorm':
+        if dtype == 'float32':
+            base_op = BatchNormFloat()
+            jit_op = JITBatchNormFloat(base_op)
+        elif dtype == 'float64':
+            base_op = BatchNormDouble()
+            jit_op = JITBatchNormDouble(base_op)
+        else:
+            raise ValueError(f"Unsupported dtype for BatchNorm: {dtype}")
+    
+    elif operator_type.lower() == 'layernorm':
+        if dtype == 'float32':
+            base_op = LayerNormFloat()
+            jit_op = JITLayerNormFloat(base_op)
+        elif dtype == 'float64':
+            base_op = LayerNormDouble()
+            jit_op = JITLayerNormDouble(base_op)
+        else:
+            raise ValueError(f"Unsupported dtype for LayerNorm: {dtype}")
+    
+    elif operator_type.lower() == 'convolution2d':
+        if dtype == 'float32':
+            base_op = Convolution2DFloat()
+            jit_op = JITConvolution2DFloat(base_op)
+        elif dtype == 'float64':
+            base_op = Convolution2DDouble()
+            jit_op = JITConvolution2DDouble(base_op)
+        else:
+            raise ValueError(f"Unsupported dtype for Convolution2D: {dtype}")
     
     else:
         raise ValueError(f"Unsupported operator type: {operator_type}")
@@ -478,13 +618,41 @@ __all__ = [
     
     # 核心类
     "Tensor", "TensorFloat", "TensorDouble", "TensorInt",
+    
+    # cuBlas算子
+    "Scal", "ScalFloat", "ScalDouble",
+    "Axpy", "AxpyFloat", "AxpyDouble",
+    "Copy", "CopyFloat", "CopyDouble",
+    "Dot", "DotFloat", "DotDouble",
     "Gemm", "GemmFloat", "GemmDouble",
     "Gemv", "GemvFloat", "GemvDouble",
+    "Symm", "SymmFloat", "SymmDouble",
+    "Trsm", "TrsmFloat", "TrsmDouble",
+    
+    # cuDNN算子
     "Relu", "ReluFloat", "ReluDouble",
     "Softmax", "SoftmaxFloat", "SoftmaxDouble",
+    "BatchNorm", "BatchNormFloat", "BatchNormDouble",
+    "LayerNorm", "LayerNormFloat", "LayerNormDouble",
+    "Convolution2D", "Convolution2DFloat", "Convolution2DDouble",
     "MatMul", "MatMulFloat", "MatMulDouble",
+    "BatchMatMul", "BatchMatMulFloat", "BatchMatMulDouble",
+    "Flatten", "FlattenFloat", "FlattenDouble",
+    "View", "ViewFloat", "ViewDouble",
+    "MaxPool2D", "MaxPool2DFloat", "MaxPool2DDouble",
+    "AveragePool2D", "AveragePool2DFloat", "AveragePool2DDouble",
+    "GlobalMaxPool2D", "GlobalMaxPool2DFloat", "GlobalMaxPool2DDouble",
+    "GlobalAveragePool2D", "GlobalAveragePool2DFloat", "GlobalAveragePool2DDouble",
+    
+    # JIT包装器
     "JITGemm", "JITGemmFloat", "JITGemmDouble",
     "JITGemv", "JITGemvFloat", "JITGemvDouble",
+    "JITRelu", "JITReluFloat", "JITReluDouble",
+    "JITSoftmax", "JITSoftmaxFloat", "JITSoftmaxDouble",
+    "JITBatchNorm", "JITBatchNormFloat", "JITBatchNormDouble",
+    "JITLayerNorm", "JITLayerNormFloat", "JITLayerNormDouble",
+    "JITConvolution2D", "JITConvolution2DFloat", "JITConvolution2DDouble",
+    "JITMatMul", "JITMatMulFloat", "JITMatMulDouble",
     
     # 配置类
     "JITConfig", "GlobalJITConfig",

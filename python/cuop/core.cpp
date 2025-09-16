@@ -5,11 +5,33 @@
 #include <pybind11/eigen.h>
 
 #include "data/tensor.hpp"
+
+// cuBlas算子
+#include "cuda_op/detail/cuBlas/scal.hpp"
+#include "cuda_op/detail/cuBlas/axpy.hpp"
+#include "cuda_op/detail/cuBlas/copy.hpp"
+#include "cuda_op/detail/cuBlas/dot.hpp"
 #include "cuda_op/detail/cuBlas/gemm.hpp"
 #include "cuda_op/detail/cuBlas/gemv.hpp"
+#include "cuda_op/detail/cuBlas/symm.hpp"
+#include "cuda_op/detail/cuBlas/trsm.hpp"
+
+// cuDNN算子
 #include "cuda_op/detail/cuDNN/relu.hpp"
 #include "cuda_op/detail/cuDNN/softmax.hpp"
+#include "cuda_op/detail/cuDNN/batchnorm.hpp"
+#include "cuda_op/detail/cuDNN/layernorm.hpp"
+#include "cuda_op/detail/cuDNN/convolution.hpp"
 #include "cuda_op/detail/cuDNN/matmul.hpp"
+#include "cuda_op/detail/cuDNN/batchmatmul.hpp"
+#include "cuda_op/detail/cuDNN/flatten.hpp"
+#include "cuda_op/detail/cuDNN/view.hpp"
+#include "cuda_op/detail/cuDNN/maxpool.hpp"
+#include "cuda_op/detail/cuDNN/averagepool.hpp"
+#include "cuda_op/detail/cuDNN/globalmaxpool.hpp"
+#include "cuda_op/detail/cuDNN/globalaverpool.hpp"
+
+// JIT相关
 #include "jit/jit_wrapper.hpp"
 #include "jit/jit_config.hpp"
 #include "jit/jit_persistent_cache.hpp"
@@ -103,6 +125,49 @@ void bind_tensor(py::module& m, const std::string& type_name) {
 // 基础算子绑定
 template<typename T>
 void bind_basic_operators(py::module& m, const std::string& type_name) {
+    // cuBlas算子
+    // SCAL算子
+    py::class_<Scal<T>>(m, ("Scal" + type_name).c_str())
+        .def(py::init<T>())
+        .def("set_alpha", &Scal<T>::SetAlpha)
+        .def("forward", [](Scal<T>& self, Tensor<T>& input) {
+            auto status = self.Forward(input);
+            if (status != StatusCode::SUCCESS) {
+                throw std::runtime_error("SCAL forward failed");
+            }
+        });
+    
+    // AXPY算子
+    py::class_<Axpy<T>>(m, ("Axpy" + type_name).c_str())
+        .def(py::init<T>())
+        .def("set_alpha", &Axpy<T>::SetAlpha)
+        .def("forward", [](Axpy<T>& self, const Tensor<T>& x, Tensor<T>& y) {
+            auto status = self.Forward(x, y);
+            if (status != StatusCode::SUCCESS) {
+                throw std::runtime_error("AXPY forward failed");
+            }
+        });
+    
+    // COPY算子
+    py::class_<Copy<T>>(m, ("Copy" + type_name).c_str())
+        .def(py::init<>())
+        .def("forward", [](Copy<T>& self, const Tensor<T>& x, Tensor<T>& y) {
+            auto status = self.Forward(x, y);
+            if (status != StatusCode::SUCCESS) {
+                throw std::runtime_error("COPY forward failed");
+            }
+        });
+    
+    // DOT算子
+    py::class_<Dot<T>>(m, ("Dot" + type_name).c_str())
+        .def(py::init<>())
+        .def("forward", [](Dot<T>& self, const Tensor<T>& x, const Tensor<T>& y, T& result) {
+            auto status = self.Forward(x, y, result);
+            if (status != StatusCode::SUCCESS) {
+                throw std::runtime_error("DOT forward failed");
+            }
+        });
+    
     // GEMM算子
     py::class_<Gemm<T>>(m, ("Gemm" + type_name).c_str())
         .def(py::init<>())
@@ -125,6 +190,29 @@ void bind_basic_operators(py::module& m, const std::string& type_name) {
             }
         });
     
+    // SYMM算子
+    py::class_<Symm<T>>(m, ("Symm" + type_name).c_str())
+        .def(py::init<int, int, T, T>())  // side, uplo, alpha, beta
+        .def("set_weight", &Symm<T>::SetWeight)
+        .def("forward", [](Symm<T>& self, const Tensor<T>& input, Tensor<T>& output) {
+            auto status = self.Forward(input, output);
+            if (status != StatusCode::SUCCESS) {
+                throw std::runtime_error("SYMM forward failed");
+            }
+        });
+    
+    // TRSM算子
+    py::class_<Trsm<T>>(m, ("Trsm" + type_name).c_str())
+        .def(py::init<int, int, int, int, T>())  // side, uplo, trans, diag, alpha
+        .def("set_matrix_a", &Trsm<T>::SetMatrixA)
+        .def("forward", [](Trsm<T>& self, const Tensor<T>& input, Tensor<T>& output) {
+            auto status = self.Forward(input, output);
+            if (status != StatusCode::SUCCESS) {
+                throw std::runtime_error("TRSM forward failed");
+            }
+        });
+    
+    // cuDNN算子
     // ReLU算子
     py::class_<Relu<T>>(m, ("Relu" + type_name).c_str())
         .def(py::init<>())
@@ -138,20 +226,130 @@ void bind_basic_operators(py::module& m, const std::string& type_name) {
     // Softmax算子
     py::class_<Softmax<T>>(m, ("Softmax" + type_name).c_str())
         .def(py::init<>())
-        .def("forward", [](Softmax<T>& self, const Tensor<T>& input, Tensor<T>& output) {
-            auto status = self.Forward(input, output);
+        .def("forward", [](Softmax<T>& self, const Tensor<T>& input, Tensor<T>& output, int axis) {
+            auto status = self.Forward(input, output, axis);
             if (status != StatusCode::SUCCESS) {
                 throw std::runtime_error("Softmax forward failed");
+            }
+        });
+    
+    // BatchNorm算子
+    py::class_<BatchNorm<T>>(m, ("BatchNorm" + type_name).c_str())
+        .def(py::init<>())
+        .def("set_gamma", &BatchNorm<T>::SetGamma)
+        .def("set_beta", &BatchNorm<T>::SetBeta)
+        .def("set_running_mean", &BatchNorm<T>::SetRunningMean)
+        .def("set_running_var", &BatchNorm<T>::SetRunningVar)
+        .def("forward", [](BatchNorm<T>& self, const Tensor<T>& input, Tensor<T>& output) {
+            auto status = self.Forward(input, output);
+            if (status != StatusCode::SUCCESS) {
+                throw std::runtime_error("BatchNorm forward failed");
+            }
+        });
+    
+    // LayerNorm算子
+    py::class_<LayerNorm<T>>(m, ("LayerNorm" + type_name).c_str())
+        .def(py::init<>())
+        .def("set_gamma", &LayerNorm<T>::SetGamma)
+        .def("set_beta", &LayerNorm<T>::SetBeta)
+        .def("forward", [](LayerNorm<T>& self, const Tensor<T>& input, Tensor<T>& output) {
+            auto status = self.Forward(input, output);
+            if (status != StatusCode::SUCCESS) {
+                throw std::runtime_error("LayerNorm forward failed");
+            }
+        });
+    
+    // Convolution2D算子
+    py::class_<Convolution2D<T>>(m, ("Convolution2D" + type_name).c_str())
+        .def(py::init<int, int, int, int, int, int>())  // in_channels, out_channels, kernel_h, kernel_w, stride_h, stride_w
+        .def("set_weight", &Convolution2D<T>::SetWeight)
+        .def("set_bias", &Convolution2D<T>::SetBias)
+        .def("forward", [](Convolution2D<T>& self, const Tensor<T>& input, Tensor<T>& output, int pad_h, int pad_w) {
+            auto status = self.Forward(input, output, pad_h, pad_w);
+            if (status != StatusCode::SUCCESS) {
+                throw std::runtime_error("Convolution2D forward failed");
             }
         });
     
     // MatMul算子
     py::class_<MatMul<T>>(m, ("MatMul" + type_name).c_str())
         .def(py::init<>())
-        .def("forward", [](MatMul<T>& self, const Tensor<T>& input, Tensor<T>& output) {
-            auto status = self.Forward(input, output);
+        .def("forward", [](MatMul<T>& self, const Tensor<T>& A, const Tensor<T>& B, Tensor<T>& C, int axis) {
+            auto status = self.Forward(A, B, C, axis);
             if (status != StatusCode::SUCCESS) {
                 throw std::runtime_error("MatMul forward failed");
+            }
+        });
+    
+    // BatchMatMul算子
+    py::class_<BatchMatMul<T>>(m, ("BatchMatMul" + type_name).c_str())
+        .def(py::init<>())
+        .def("forward", [](BatchMatMul<T>& self, const Tensor<T>& A, const Tensor<T>& B, Tensor<T>& C) {
+            auto status = self.Forward(A, B, C);
+            if (status != StatusCode::SUCCESS) {
+                throw std::runtime_error("BatchMatMul forward failed");
+            }
+        });
+    
+    // Flatten算子
+    py::class_<Flatten<T>>(m, ("Flatten" + type_name).c_str())
+        .def(py::init<>())
+        .def("forward", [](Flatten<T>& self, const Tensor<T>& input, Tensor<T>& output, int start_dim) {
+            auto status = self.Forward(input, output, start_dim);
+            if (status != StatusCode::SUCCESS) {
+                throw std::runtime_error("Flatten forward failed");
+            }
+        });
+    
+    // View算子
+    py::class_<View<T>>(m, ("View" + type_name).c_str())
+        .def(py::init<>())
+        .def("set_offset", &View<T>::SetOffset)
+        .def("set_shape", &View<T>::SetShape)
+        .def("forward", [](View<T>& self, const Tensor<T>& input, Tensor<T>& output, const std::vector<std::size_t>& offset, const std::vector<std::size_t>& new_shape) {
+            auto status = self.Forward(input, output, offset, new_shape);
+            if (status != StatusCode::SUCCESS) {
+                throw std::runtime_error("View forward failed");
+            }
+        });
+    
+    // MaxPool2D算子
+    py::class_<MaxPool2D<T>>(m, ("MaxPool2D" + type_name).c_str())
+        .def(py::init<>())
+        .def("forward", [](MaxPool2D<T>& self, const Tensor<T>& input, Tensor<T>& output, int kernel_h, int kernel_w) {
+            auto status = self.Forward(input, output, kernel_h, kernel_w);
+            if (status != StatusCode::SUCCESS) {
+                throw std::runtime_error("MaxPool2D forward failed");
+            }
+        });
+    
+    // AveragePool2D算子
+    py::class_<AveragePool2D<T>>(m, ("AveragePool2D" + type_name).c_str())
+        .def(py::init<>())
+        .def("forward", [](AveragePool2D<T>& self, const Tensor<T>& input, Tensor<T>& output, int kernel_h, int kernel_w) {
+            auto status = self.Forward(input, output, kernel_h, kernel_w);
+            if (status != StatusCode::SUCCESS) {
+                throw std::runtime_error("AveragePool2D forward failed");
+            }
+        });
+    
+    // GlobalMaxPool2D算子
+    py::class_<GlobalMaxPool2D<T>>(m, ("GlobalMaxPool2D" + type_name).c_str())
+        .def(py::init<>())
+        .def("forward", [](GlobalMaxPool2D<T>& self, const Tensor<T>& input, Tensor<T>& output, int kernel_h, int kernel_w) {
+            auto status = self.Forward(input, output, kernel_h, kernel_w);
+            if (status != StatusCode::SUCCESS) {
+                throw std::runtime_error("GlobalMaxPool2D forward failed");
+            }
+        });
+    
+    // GlobalAveragePool2D算子
+    py::class_<GlobalAveragePool2D<T>>(m, ("GlobalAveragePool2D" + type_name).c_str())
+        .def(py::init<>())
+        .def("forward", [](GlobalAveragePool2D<T>& self, const Tensor<T>& input, Tensor<T>& output, int kernel_h, int kernel_w) {
+            auto status = self.Forward(input, output, kernel_h, kernel_w);
+            if (status != StatusCode::SUCCESS) {
+                throw std::runtime_error("GlobalAveragePool2D forward failed");
             }
         });
 }
@@ -198,6 +396,7 @@ void bind_jit_config(py::module& m) {
 // JIT包装器绑定
 template<typename T>
 void bind_jit_wrapper(py::module& m, const std::string& type_name) {
+    // GEMM JIT包装器
     py::class_<JITWrapper<Gemm<T>>>(m, ("JITGemm" + type_name).c_str())
         .def(py::init<Gemm<T>&>())
         .def("enable_jit", &JITWrapper<Gemm<T>>::EnableJIT)
@@ -214,6 +413,7 @@ void bind_jit_wrapper(py::module& m, const std::string& type_name) {
         .def("is_jit_compiled", &JITWrapper<Gemm<T>>::IsJITCompiled)
         .def("get_last_error", &JITWrapper<Gemm<T>>::GetLastError);
     
+    // GEMV JIT包装器
     py::class_<JITWrapper<Gemv<T>>>(m, ("JITGemv" + type_name).c_str())
         .def(py::init<Gemv<T>&>())
         .def("enable_jit", &JITWrapper<Gemv<T>>::EnableJIT)
@@ -229,6 +429,108 @@ void bind_jit_wrapper(py::module& m, const std::string& type_name) {
         .def("get_performance_profile", &JITWrapper<Gemv<T>>::GetPerformanceProfile)
         .def("is_jit_compiled", &JITWrapper<Gemv<T>>::IsJITCompiled)
         .def("get_last_error", &JITWrapper<Gemv<T>>::GetLastError);
+    
+    // ReLU JIT包装器
+    py::class_<JITWrapper<Relu<T>>>(m, ("JITRelu" + type_name).c_str())
+        .def(py::init<Relu<T>&>())
+        .def("enable_jit", &JITWrapper<Relu<T>>::EnableJIT)
+        .def("enable_persistent_cache", &JITWrapper<Relu<T>>::EnablePersistentCache)
+        .def("set_persistent_cache_directory", &JITWrapper<Relu<T>>::SetPersistentCacheDirectory)
+        .def("set_jit_config", &JITWrapper<Relu<T>>::SetJITConfig)
+        .def("forward", [](JITWrapper<Relu<T>>& self, const Tensor<T>& input, Tensor<T>& output) {
+            auto status = self.Forward(input, output);
+            if (status != StatusCode::SUCCESS) {
+                throw std::runtime_error("JIT ReLU forward failed");
+            }
+        })
+        .def("get_performance_profile", &JITWrapper<Relu<T>>::GetPerformanceProfile)
+        .def("is_jit_compiled", &JITWrapper<Relu<T>>::IsJITCompiled)
+        .def("get_last_error", &JITWrapper<Relu<T>>::GetLastError);
+    
+    // Softmax JIT包装器
+    py::class_<JITWrapper<Softmax<T>>>(m, ("JITSoftmax" + type_name).c_str())
+        .def(py::init<Softmax<T>&>())
+        .def("enable_jit", &JITWrapper<Softmax<T>>::EnableJIT)
+        .def("enable_persistent_cache", &JITWrapper<Softmax<T>>::EnablePersistentCache)
+        .def("set_persistent_cache_directory", &JITWrapper<Softmax<T>>::SetPersistentCacheDirectory)
+        .def("set_jit_config", &JITWrapper<Softmax<T>>::SetJITConfig)
+        .def("forward", [](JITWrapper<Softmax<T>>& self, const Tensor<T>& input, Tensor<T>& output, int axis) {
+            auto status = self.Forward(input, output, axis);
+            if (status != StatusCode::SUCCESS) {
+                throw std::runtime_error("JIT Softmax forward failed");
+            }
+        })
+        .def("get_performance_profile", &JITWrapper<Softmax<T>>::GetPerformanceProfile)
+        .def("is_jit_compiled", &JITWrapper<Softmax<T>>::IsJITCompiled)
+        .def("get_last_error", &JITWrapper<Softmax<T>>::GetLastError);
+    
+    // BatchNorm JIT包装器
+    py::class_<JITWrapper<BatchNorm<T>>>(m, ("JITBatchNorm" + type_name).c_str())
+        .def(py::init<BatchNorm<T>&>())
+        .def("enable_jit", &JITWrapper<BatchNorm<T>>::EnableJIT)
+        .def("enable_persistent_cache", &JITWrapper<BatchNorm<T>>::EnablePersistentCache)
+        .def("set_persistent_cache_directory", &JITWrapper<BatchNorm<T>>::SetPersistentCacheDirectory)
+        .def("set_jit_config", &JITWrapper<BatchNorm<T>>::SetJITConfig)
+        .def("forward", [](JITWrapper<BatchNorm<T>>& self, const Tensor<T>& input, Tensor<T>& output) {
+            auto status = self.Forward(input, output);
+            if (status != StatusCode::SUCCESS) {
+                throw std::runtime_error("JIT BatchNorm forward failed");
+            }
+        })
+        .def("get_performance_profile", &JITWrapper<BatchNorm<T>>::GetPerformanceProfile)
+        .def("is_jit_compiled", &JITWrapper<BatchNorm<T>>::IsJITCompiled)
+        .def("get_last_error", &JITWrapper<BatchNorm<T>>::GetLastError);
+    
+    // LayerNorm JIT包装器
+    py::class_<JITWrapper<LayerNorm<T>>>(m, ("JITLayerNorm" + type_name).c_str())
+        .def(py::init<LayerNorm<T>&>())
+        .def("enable_jit", &JITWrapper<LayerNorm<T>>::EnableJIT)
+        .def("enable_persistent_cache", &JITWrapper<LayerNorm<T>>::EnablePersistentCache)
+        .def("set_persistent_cache_directory", &JITWrapper<LayerNorm<T>>::SetPersistentCacheDirectory)
+        .def("set_jit_config", &JITWrapper<LayerNorm<T>>::SetJITConfig)
+        .def("forward", [](JITWrapper<LayerNorm<T>>& self, const Tensor<T>& input, Tensor<T>& output) {
+            auto status = self.Forward(input, output);
+            if (status != StatusCode::SUCCESS) {
+                throw std::runtime_error("JIT LayerNorm forward failed");
+            }
+        })
+        .def("get_performance_profile", &JITWrapper<LayerNorm<T>>::GetPerformanceProfile)
+        .def("is_jit_compiled", &JITWrapper<LayerNorm<T>>::IsJITCompiled)
+        .def("get_last_error", &JITWrapper<LayerNorm<T>>::GetLastError);
+    
+    // Convolution2D JIT包装器
+    py::class_<JITWrapper<Convolution2D<T>>>(m, ("JITConvolution2D" + type_name).c_str())
+        .def(py::init<Convolution2D<T>&>())
+        .def("enable_jit", &JITWrapper<Convolution2D<T>>::EnableJIT)
+        .def("enable_persistent_cache", &JITWrapper<Convolution2D<T>>::EnablePersistentCache)
+        .def("set_persistent_cache_directory", &JITWrapper<Convolution2D<T>>::SetPersistentCacheDirectory)
+        .def("set_jit_config", &JITWrapper<Convolution2D<T>>::SetJITConfig)
+        .def("forward", [](JITWrapper<Convolution2D<T>>& self, const Tensor<T>& input, Tensor<T>& output, int pad_h, int pad_w) {
+            auto status = self.Forward(input, output, pad_h, pad_w);
+            if (status != StatusCode::SUCCESS) {
+                throw std::runtime_error("JIT Convolution2D forward failed");
+            }
+        })
+        .def("get_performance_profile", &JITWrapper<Convolution2D<T>>::GetPerformanceProfile)
+        .def("is_jit_compiled", &JITWrapper<Convolution2D<T>>::IsJITCompiled)
+        .def("get_last_error", &JITWrapper<Convolution2D<T>>::GetLastError);
+    
+    // MatMul JIT包装器
+    py::class_<JITWrapper<MatMul<T>>>(m, ("JITMatMul" + type_name).c_str())
+        .def(py::init<MatMul<T>&>())
+        .def("enable_jit", &JITWrapper<MatMul<T>>::EnableJIT)
+        .def("enable_persistent_cache", &JITWrapper<MatMul<T>>::EnablePersistentCache)
+        .def("set_persistent_cache_directory", &JITWrapper<MatMul<T>>::SetPersistentCacheDirectory)
+        .def("set_jit_config", &JITWrapper<MatMul<T>>::SetJITConfig)
+        .def("forward", [](JITWrapper<MatMul<T>>& self, const Tensor<T>& A, const Tensor<T>& B, Tensor<T>& C, int axis) {
+            auto status = self.Forward(A, B, C, axis);
+            if (status != StatusCode::SUCCESS) {
+                throw std::runtime_error("JIT MatMul forward failed");
+            }
+        })
+        .def("get_performance_profile", &JITWrapper<MatMul<T>>::GetPerformanceProfile)
+        .def("is_jit_compiled", &JITWrapper<MatMul<T>>::IsJITCompiled)
+        .def("get_last_error", &JITWrapper<MatMul<T>>::GetLastError);
 }
 
 // 性能分析绑定
