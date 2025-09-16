@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(test_globalmaxpool2D LANGUAGES CXX CUDA)
+project(test_batchnorm LANGUAGES CXX CUDA)
 
 # Set CUDA architectures policy and target
 cmake_policy(SET CMP0104 NEW)
@@ -25,18 +25,18 @@ include_directories(
 
 # Add CUDA source files
 set(CUDA_SOURCES
-    ../../../../src/cuda_op/detail/cuDNN/globalmaxpool.cu
+    ../../../../src/cuda_op/detail/cuDNN/batchnorm.cu
     ../../../../src/base/memory_pool.cu
 )
 
 # Create executable with both C++ and CUDA sources
-add_executable(test_globalmaxpool2D 
-    test_globalmaxpool2D.cpp
+add_executable(test_batchnorm 
+    test_batchnorm.cpp
     ${CUDA_SOURCES}
 )
 
 # Link libraries
-target_link_libraries(test_globalmaxpool2D
+target_link_libraries(test_batchnorm
     ${CUDA_LIBRARIES}
     ${GTEST_BOTH_LIBRARIES}
     glog::glog
@@ -45,4 +45,4 @@ target_link_libraries(test_globalmaxpool2D
 )
 
 enable_testing()
-add_test(NAME test_globalmaxpool2D COMMAND test_globalmaxpool2D) 
+add_test(NAME test_batchnorm COMMAND test_batchnorm)

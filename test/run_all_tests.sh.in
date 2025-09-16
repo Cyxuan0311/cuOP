@@ -1,0 +1,238 @@
+#!/bin/bash
+
+# 运行所有单元测试的脚本
+# 此脚本由CMake自动生成
+
+echo "=========================================="
+echo "运行 cu_op_mem 单元测试"
+echo "=========================================="
+
+# 设置错误时退出
+set -e
+
+# 获取脚本所在目录
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BUILD_DIR="${SCRIPT_DIR}"
+
+echo "构建目录: ${BUILD_DIR}"
+
+# 检查是否在正确的目录中
+if [ ! -d "${BUILD_DIR}" ]; then
+    echo "错误: 构建目录不存在: ${BUILD_DIR}"
+    exit 1
+fi
+
+# 运行cuBlas单元测试
+echo ""
+echo "运行 cuBlas 单元测试..."
+echo "----------------------------------------"
+
+# GEMM单元测试
+if [ -f "${BUILD_DIR}/cuBlas/test_gemm/test_gemm" ]; then
+    echo "运行 GEMM 单元测试..."
+    cd "${BUILD_DIR}/cuBlas/test_gemm"
+    ./test_gemm
+    echo "GEMM 单元测试完成"
+else
+    echo "警告: GEMM 单元测试可执行文件不存在"
+fi
+
+# GEMV单元测试
+if [ -f "${BUILD_DIR}/cuBlas/test_gemv/test_gemv" ]; then
+    echo "运行 GEMV 单元测试..."
+    cd "${BUILD_DIR}/cuBlas/test_gemv"
+    ./test_gemv
+    echo "GEMV 单元测试完成"
+else
+    echo "警告: GEMV 单元测试可执行文件不存在"
+fi
+
+# SCAL单元测试
+if [ -f "${BUILD_DIR}/cuBlas/test_scal/test_scal" ]; then
+    echo "运行 SCAL 单元测试..."
+    cd "${BUILD_DIR}/cuBlas/test_scal"
+    ./test_scal
+    echo "SCAL 单元测试完成"
+else
+    echo "警告: SCAL 单元测试可执行文件不存在"
+fi
+
+# AXPY单元测试
+if [ -f "${BUILD_DIR}/cuBlas/test_axpy/test_axpy" ]; then
+    echo "运行 AXPY 单元测试..."
+    cd "${BUILD_DIR}/cuBlas/test_axpy"
+    ./test_axpy
+    echo "AXPY 单元测试完成"
+else
+    echo "警告: AXPY 单元测试可执行文件不存在"
+fi
+
+# COPY单元测试
+if [ -f "${BUILD_DIR}/cuBlas/test_copy/test_copy" ]; then
+    echo "运行 COPY 单元测试..."
+    cd "${BUILD_DIR}/cuBlas/test_copy"
+    ./test_copy
+    echo "COPY 单元测试完成"
+else
+    echo "警告: COPY 单元测试可执行文件不存在"
+fi
+
+# DOT单元测试
+if [ -f "${BUILD_DIR}/cuBlas/test_dot/test_dot" ]; then
+    echo "运行 DOT 单元测试..."
+    cd "${BUILD_DIR}/cuBlas/test_dot"
+    ./test_dot
+    echo "DOT 单元测试完成"
+else
+    echo "警告: DOT 单元测试可执行文件不存在"
+fi
+
+# SYMM单元测试
+if [ -f "${BUILD_DIR}/cuBlas/test_symm/test_symm" ]; then
+    echo "运行 SYMM 单元测试..."
+    cd "${BUILD_DIR}/cuBlas/test_symm"
+    ./test_symm
+    echo "SYMM 单元测试完成"
+else
+    echo "警告: SYMM 单元测试可执行文件不存在"
+fi
+
+# TRSM单元测试
+if [ -f "${BUILD_DIR}/cuBlas/test_trsm/test_trsm" ]; then
+    echo "运行 TRSM 单元测试..."
+    cd "${BUILD_DIR}/cuBlas/test_trsm"
+    ./test_trsm
+    echo "TRSM 单元测试完成"
+else
+    echo "警告: TRSM 单元测试可执行文件不存在"
+fi
+
+# 运行cuDNN单元测试
+echo ""
+echo "运行 cuDNN 单元测试..."
+echo "----------------------------------------"
+
+# ReLU单元测试
+if [ -f "${BUILD_DIR}/cuDNN/test_relu/test_relu" ]; then
+    echo "运行 ReLU 单元测试..."
+    cd "${BUILD_DIR}/cuDNN/test_relu"
+    ./test_relu
+    echo "ReLU 单元测试完成"
+else
+    echo "警告: ReLU 单元测试可执行文件不存在"
+fi
+
+# Softmax单元测试
+if [ -f "${BUILD_DIR}/cuDNN/test_softmax/test_softmax" ]; then
+    echo "运行 Softmax 单元测试..."
+    cd "${BUILD_DIR}/cuDNN/test_softmax"
+    ./test_softmax
+    echo "Softmax 单元测试完成"
+else
+    echo "警告: Softmax 单元测试可执行文件不存在"
+fi
+
+# MaxPool2D单元测试
+if [ -f "${BUILD_DIR}/cuDNN/test_maxpool2D/test_maxpool2D" ]; then
+    echo "运行 MaxPool2D 单元测试..."
+    cd "${BUILD_DIR}/cuDNN/test_maxpool2D"
+    ./test_maxpool2D
+    echo "MaxPool2D 单元测试完成"
+else
+    echo "警告: MaxPool2D 单元测试可执行文件不存在"
+fi
+
+# AveragePool2D单元测试
+if [ -f "${BUILD_DIR}/cuDNN/test_averagepool2D/test_averagepool2D" ]; then
+    echo "运行 AveragePool2D 单元测试..."
+    cd "${BUILD_DIR}/cuDNN/test_averagepool2D"
+    ./test_averagepool2D
+    echo "AveragePool2D 单元测试完成"
+else
+    echo "警告: AveragePool2D 单元测试可执行文件不存在"
+fi
+
+# GlobalMaxPool2D单元测试
+if [ -f "${BUILD_DIR}/cuDNN/test_globalmaxpool2D/test_globalmaxpool2D" ]; then
+    echo "运行 GlobalMaxPool2D 单元测试..."
+    cd "${BUILD_DIR}/cuDNN/test_globalmaxpool2D"
+    ./test_globalmaxpool2D
+    echo "GlobalMaxPool2D 单元测试完成"
+else
+    echo "警告: GlobalMaxPool2D 单元测试可执行文件不存在"
+fi
+
+# GlobalAveragePool2D单元测试
+if [ -f "${BUILD_DIR}/cuDNN/test_globalaverpool2D/test_globalaverpool2D" ]; then
+    echo "运行 GlobalAveragePool2D 单元测试..."
+    cd "${BUILD_DIR}/cuDNN/test_globalaverpool2D"
+    ./test_globalaverpool2D
+    echo "GlobalAveragePool2D 单元测试完成"
+else
+    echo "警告: GlobalAveragePool2D 单元测试可执行文件不存在"
+fi
+
+# MatMul单元测试
+if [ -f "${BUILD_DIR}/cuDNN/test_matmul/test_matmul" ]; then
+    echo "运行 MatMul 单元测试..."
+    cd "${BUILD_DIR}/cuDNN/test_matmul"
+    ./test_matmul
+    echo "MatMul 单元测试完成"
+else
+    echo "警告: MatMul 单元测试可执行文件不存在"
+fi
+
+# BatchNorm单元测试
+if [ -f "${BUILD_DIR}/cuDNN/test_batchnorm/test_batchnorm" ]; then
+    echo "运行 BatchNorm 单元测试..."
+    cd "${BUILD_DIR}/cuDNN/test_batchnorm"
+    ./test_batchnorm
+    echo "BatchNorm 单元测试完成"
+else
+    echo "警告: BatchNorm 单元测试可执行文件不存在"
+fi
+
+# LayerNorm单元测试
+if [ -f "${BUILD_DIR}/cuDNN/test_layernorm/test_layernorm" ]; then
+    echo "运行 LayerNorm 单元测试..."
+    cd "${BUILD_DIR}/cuDNN/test_layernorm"
+    ./test_layernorm
+    echo "LayerNorm 单元测试完成"
+else
+    echo "警告: LayerNorm 单元测试可执行文件不存在"
+fi
+
+# Convolution单元测试
+if [ -f "${BUILD_DIR}/cuDNN/test_convolution/test_convolution" ]; then
+    echo "运行 Convolution 单元测试..."
+    cd "${BUILD_DIR}/cuDNN/test_convolution"
+    ./test_convolution
+    echo "Convolution 单元测试完成"
+else
+    echo "警告: Convolution 单元测试可执行文件不存在"
+fi
+
+# Flatten单元测试
+if [ -f "${BUILD_DIR}/cuDNN/test_flatten/test_flatten" ]; then
+    echo "运行 Flatten 单元测试..."
+    cd "${BUILD_DIR}/cuDNN/test_flatten"
+    ./test_flatten
+    echo "Flatten 单元测试完成"
+else
+    echo "警告: Flatten 单元测试可执行文件不存在"
+fi
+
+# View单元测试
+if [ -f "${BUILD_DIR}/cuDNN/test_view/test_view" ]; then
+    echo "运行 View 单元测试..."
+    cd "${BUILD_DIR}/cuDNN/test_view"
+    ./test_view
+    echo "View 单元测试完成"
+else
+    echo "警告: View 单元测试可执行文件不存在"
+fi
+
+echo ""
+echo "=========================================="
+echo "所有单元测试完成！"
+echo "=========================================="

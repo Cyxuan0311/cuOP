@@ -29,7 +29,7 @@ TEST_F(MatMulTest, Forward2D) {
     cudaMemcpy(A.data(), h_A, sizeof(h_A), cudaMemcpyHostToDevice);
     cudaMemcpy(B.data(), h_B, sizeof(h_B), cudaMemcpyHostToDevice);
     MatMul<float> matmul;
-    matmul.Forward(A, B, C);
+    matmul.Forward(A, B, C, -1);
     float h_result[8] = {0};
     cudaMemcpy(h_result, C.data(), sizeof(h_result), cudaMemcpyDeviceToHost);
     float expected[8] = {1,2,3,0,4,5,6,0};
@@ -54,7 +54,7 @@ TEST_F(MatMulTest, ForwardBatch3D) {
     cudaMemcpy(A.data(), h_A, sizeof(h_A), cudaMemcpyHostToDevice);
     cudaMemcpy(B.data(), h_B, sizeof(h_B), cudaMemcpyHostToDevice);
     MatMul<float> matmul;
-    matmul.Forward(A, B, C);
+    matmul.Forward(A, B, C, -1);
     float h_result[16] = {0};
     cudaMemcpy(h_result, C.data(), sizeof(h_result), cudaMemcpyDeviceToHost);
     // batch 0: [1,2,3;4,5,6] x [1,0,0,0;0,1,0,0;0,0,1,0]

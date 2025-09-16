@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "cuda_op/detail/cuDNN/globalmaxpool2D.hpp"
+#include "cuda_op/detail/cuDNN/globalmaxpool.hpp"
 #include <glog/logging.h>
 #include "data/tensor.hpp"
 #include <cuda_runtime.h>
@@ -26,7 +26,7 @@ TEST_F(GlobalMaxPool2DTest, Forward2D) {
     Tensor<float> output;
     cudaMemcpy(input.data(), h_input, sizeof(h_input), cudaMemcpyHostToDevice);
     GlobalMaxPool2D<float> pool;
-    pool.Forward(input, output);
+    pool.Forward(input, output, 2, 3);
     float h_result[1] = {0};
     cudaMemcpy(h_result, output.data(), sizeof(h_result), cudaMemcpyDeviceToHost);
     float expected = 4.0f;
@@ -41,7 +41,7 @@ TEST_F(GlobalMaxPool2DTest, Forward4D) {
     Tensor<float> output;
     cudaMemcpy(input.data(), h_input, sizeof(h_input), cudaMemcpyHostToDevice);
     GlobalMaxPool2D<float> pool;
-    pool.Forward(input, output);
+    pool.Forward(input, output, 2, 3);
     float h_result[1] = {0};
     cudaMemcpy(h_result, output.data(), sizeof(h_result), cudaMemcpyDeviceToHost);
     float expected = 4.0f;
@@ -58,7 +58,7 @@ TEST_F(GlobalMaxPool2DTest, Forward4DBatchChannel) {
     Tensor<float> output;
     cudaMemcpy(input.data(), h_input, sizeof(h_input), cudaMemcpyHostToDevice);
     GlobalMaxPool2D<float> pool;
-    pool.Forward(input, output);
+    pool.Forward(input, output, 2, 3);
     float h_result[4] = {0};
     cudaMemcpy(h_result, output.data(), sizeof(h_result), cudaMemcpyDeviceToHost);
     // 每个 [N, C] 独立池化
