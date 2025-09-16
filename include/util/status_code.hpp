@@ -3,6 +3,7 @@
 #include <string>
 #include <system_error>
 #include <ostream>
+#include <cuda_runtime.h>
 
 namespace cu_op_mem {
 
