@@ -1,0 +1,198 @@
+#!/bin/bash
+
+# 运行所有基准测试的脚本
+# 此脚本由CMake自动生成
+
+echo "=========================================="
+echo "运行 cu_op_mem 基准测试"
+echo "=========================================="
+
+# 设置错误时退出
+set -e
+
+# 获取脚本所在目录
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BUILD_DIR="${SCRIPT_DIR}"
+
+echo "构建目录: ${BUILD_DIR}"
+
+# 检查是否在正确的目录中
+if [ ! -d "${BUILD_DIR}" ]; then
+    echo "错误: 构建目录不存在: ${BUILD_DIR}"
+    exit 1
+fi
+
+# 运行cuBlas基准测试
+echo ""
+echo "运行 cuBlas 基准测试..."
+echo "----------------------------------------"
+
+# GEMM基准测试
+if [ -f "${BUILD_DIR}/cuBlas/gemm/bench_gemm" ]; then
+    echo "运行 GEMM 基准测试..."
+    cd "${BUILD_DIR}/cuBlas/gemm"
+    ./bench_gemm 1024 1024 1024
+    echo "GEMM 基准测试完成"
+else
+    echo "警告: GEMM 基准测试可执行文件不存在"
+fi
+
+# GEMV基准测试
+if [ -f "${BUILD_DIR}/cuBlas/gemv/bench_gemv" ]; then
+    echo "运行 GEMV 基准测试..."
+    cd "${BUILD_DIR}/cuBlas/gemv"
+    ./bench_gemv 1024 1024
+    echo "GEMV 基准测试完成"
+else
+    echo "警告: GEMV 基准测试可执行文件不存在"
+fi
+
+# SCAL基准测试
+if [ -f "${BUILD_DIR}/cuBlas/scal/bench_scal" ]; then
+    echo "运行 SCAL 基准测试..."
+    cd "${BUILD_DIR}/cuBlas/scal"
+    ./bench_scal 1024
+    echo "SCAL 基准测试完成"
+else
+    echo "警告: SCAL 基准测试可执行文件不存在"
+fi
+
+# AXPY基准测试
+if [ -f "${BUILD_DIR}/cuBlas/axpy/bench_axpy" ]; then
+    echo "运行 AXPY 基准测试..."
+    cd "${BUILD_DIR}/cuBlas/axpy"
+    ./bench_axpy 1024
+    echo "AXPY 基准测试完成"
+else
+    echo "警告: AXPY 基准测试可执行文件不存在"
+fi
+
+# COPY基准测试
+if [ -f "${BUILD_DIR}/cuBlas/copy/bench_copy" ]; then
+    echo "运行 COPY 基准测试..."
+    cd "${BUILD_DIR}/cuBlas/copy"
+    ./bench_copy 1024
+    echo "COPY 基准测试完成"
+else
+    echo "警告: COPY 基准测试可执行文件不存在"
+fi
+
+# DOT基准测试
+if [ -f "${BUILD_DIR}/cuBlas/dot/bench_dot" ]; then
+    echo "运行 DOT 基准测试..."
+    cd "${BUILD_DIR}/cuBlas/dot"
+    ./bench_dot 1024
+    echo "DOT 基准测试完成"
+else
+    echo "警告: DOT 基准测试可执行文件不存在"
+fi
+
+# SYMM基准测试
+if [ -f "${BUILD_DIR}/cuBlas/symm/bench_symm" ]; then
+    echo "运行 SYMM 基准测试..."
+    cd "${BUILD_DIR}/cuBlas/symm"
+    ./bench_symm 512 512
+    echo "SYMM 基准测试完成"
+else
+    echo "警告: SYMM 基准测试可执行文件不存在"
+fi
+
+# TRSM基准测试
+if [ -f "${BUILD_DIR}/cuBlas/trsm/bench_trsm" ]; then
+    echo "运行 TRSM 基准测试..."
+    cd "${BUILD_DIR}/cuBlas/trsm"
+    ./bench_trsm 512 512
+    echo "TRSM 基准测试完成"
+else
+    echo "警告: TRSM 基准测试可执行文件不存在"
+fi
+
+# 运行cuDNN基准测试
+echo ""
+echo "运行 cuDNN 基准测试..."
+echo "----------------------------------------"
+
+# ReLU基准测试
+if [ -f "${BUILD_DIR}/cuDNN/Relu/bench_relu" ]; then
+    echo "运行 ReLU 基准测试..."
+    cd "${BUILD_DIR}/cuDNN/Relu"
+    ./bench_relu 1024 1024
+    echo "ReLU 基准测试完成"
+else
+    echo "警告: ReLU 基准测试可执行文件不存在"
+fi
+
+# Softmax基准测试
+if [ -f "${BUILD_DIR}/cuDNN/Softmax/bench_softmax" ]; then
+    echo "运行 Softmax 基准测试..."
+    cd "${BUILD_DIR}/cuDNN/Softmax"
+    ./bench_softmax 1024 1024
+    echo "Softmax 基准测试完成"
+else
+    echo "警告: Softmax 基准测试可执行文件不存在"
+fi
+
+# BatchNorm基准测试
+if [ -f "${BUILD_DIR}/cuDNN/BatchNorm/bench_batchnorm" ]; then
+    echo "运行 BatchNorm 基准测试..."
+    cd "${BUILD_DIR}/cuDNN/BatchNorm"
+    ./bench_batchnorm 32 64 224 224
+    echo "BatchNorm 基准测试完成"
+else
+    echo "警告: BatchNorm 基准测试可执行文件不存在"
+fi
+
+# LayerNorm基准测试
+if [ -f "${BUILD_DIR}/cuDNN/LayerNorm/bench_layernorm" ]; then
+    echo "运行 LayerNorm 基准测试..."
+    cd "${BUILD_DIR}/cuDNN/LayerNorm"
+    ./bench_layernorm 32 1024
+    echo "LayerNorm 基准测试完成"
+else
+    echo "警告: LayerNorm 基准测试可执行文件不存在"
+fi
+
+# Convolution基准测试
+if [ -f "${BUILD_DIR}/cuDNN/Convolution/bench_convolution" ]; then
+    echo "运行 Convolution 基准测试..."
+    cd "${BUILD_DIR}/cuDNN/Convolution"
+    ./bench_convolution 32 64 224 224
+    echo "Convolution 基准测试完成"
+else
+    echo "警告: Convolution 基准测试可执行文件不存在"
+fi
+
+# MaxPool基准测试
+if [ -f "${BUILD_DIR}/cuDNN/MaxPool/bench_maxpool" ]; then
+    echo "运行 MaxPool 基准测试..."
+    cd "${BUILD_DIR}/cuDNN/MaxPool"
+    ./bench_maxpool 32 64 224 224
+    echo "MaxPool 基准测试完成"
+else
+    echo "警告: MaxPool 基准测试可执行文件不存在"
+fi
+
+# AveragePool基准测试
+if [ -f "${BUILD_DIR}/cuDNN/AveragePool/bench_averagepool" ]; then
+    echo "运行 AveragePool 基准测试..."
+    cd "${BUILD_DIR}/cuDNN/AveragePool"
+    ./bench_averagepool 32 64 224 224
+    echo "AveragePool 基准测试完成"
+else
+    echo "警告: AveragePool 基准测试可执行文件不存在"
+fi
+
+# MatMul基准测试
+if [ -f "${BUILD_DIR}/cuDNN/MatMul/bench_matmul" ]; then
+    echo "运行 MatMul 基准测试..."
+    cd "${BUILD_DIR}/cuDNN/MatMul"
+    ./bench_matmul 1024 1024 1024
+    echo "MatMul 基准测试完成"
+else
+    echo "警告: MatMul 基准测试可执行文件不存在"
+fi
+
+echo ""
+echo "=========================================="
+echo "所有基准测试完成！"
+echo "=========================================="
