@@ -62,24 +62,7 @@ std::string Status::ToDetailedString() const {
 
 // ==================== ErrorUtils 命名空间实现 ====================
 
-ErrorCategory ErrorUtils::GetErrorCategory(StatusCode code) {
-    int code_value = static_cast<int>(code);
-    
-    if (code_value == 0) return ErrorCategory::SUCCESS;
-    if (code_value >= 1000 && code_value < 2000) return ErrorCategory::SYSTEM;
-    if (code_value >= 2000 && code_value < 3000) return ErrorCategory::CUDA;
-    if (code_value >= 3000 && code_value < 4000) return ErrorCategory::MEMORY;
-    if (code_value >= 4000 && code_value < 5000) return ErrorCategory::VALIDATION;
-    if (code_value >= 5000 && code_value < 6000) return ErrorCategory::COMPILATION;
-    if (code_value >= 6000 && code_value < 7000) return ErrorCategory::EXECUTION;
-    if (code_value >= 7000 && code_value < 8000) return ErrorCategory::JIT;
-    if (code_value >= 8000 && code_value < 9000) return ErrorCategory::CACHE;
-    if (code_value >= 9000 && code_value < 10000) return ErrorCategory::PLUGIN;
-    if (code_value >= 10000 && code_value < 11000) return ErrorCategory::TENSOR;
-    if (code_value >= 11000 && code_value < 12000) return ErrorCategory::OPERATOR;
-    
-    return ErrorCategory::UNKNOWN;
-}
+// GetErrorCategory is already defined inline in the header file
 
 std::string ErrorUtils::GetStatusCodeString(StatusCode code) {
     switch (code) {
@@ -191,15 +174,7 @@ std::string ErrorUtils::GetStatusCodeString(StatusCode code) {
         case StatusCode::OPERATOR_GRADIENT_ERROR: return "OPERATOR_GRADIENT_ERROR";
         case StatusCode::OPERATOR_BACKWARD_ERROR: return "OPERATOR_BACKWARD_ERROR";
         
-        // 兼容性错误码
-        case StatusCode::SHAPE_MISMATCH: return "SHAPE_MISMATCH";
-        case StatusCode::UNSUPPORTED_TYPE: return "UNSUPPORTED_TYPE";
-        case StatusCode::UNKNOWN_ERROR: return "UNKNOWN_ERROR";
-        case StatusCode::TENSOR_DIMONSION_MISMATCH: return "TENSOR_DIMENSION_MISMATCH";
-        case StatusCode::NOT_INITIALIZED: return "NOT_INITIALIZED";
-        case StatusCode::INITIALIZATION_ERROR: return "INITIALIZATION_ERROR";
-        case StatusCode::KERNEL_NOT_FOUND: return "KERNEL_NOT_FOUND";
-        case StatusCode::NOT_COMPILED: return "NOT_COMPILED";
+        // 兼容性错误码 - 这些已经在前面定义过了，删除重复
         
         default: return "UNKNOWN_ERROR_CODE";
     }
@@ -399,9 +374,7 @@ Status ErrorUtils::CudaError(cudaError_t cuda_error, const std::string& function
         case cudaErrorInvalidDevice:
             status_code = StatusCode::CUDA_DEVICE_ERROR;
             break;
-        case cudaErrorInvalidContext:
-            status_code = StatusCode::CUDA_CONTEXT_ERROR;
-            break;
+        // cudaErrorInvalidContext is not a valid CUDA error code
         case cudaErrorInvalidMemcpyDirection:
             status_code = StatusCode::MEMORY_COPY_FAILED;
             break;
