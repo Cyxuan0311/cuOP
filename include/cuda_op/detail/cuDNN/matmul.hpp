@@ -19,6 +19,11 @@ class MatMul : public Operator<T> {
     StatusCode Forward(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>& C) {
         return Forward(A, B, C, -1);
     }
+    
+    // 实现基类的纯虚函数（不支持，返回错误）
+    StatusCode Forward(const Tensor<T>& input, Tensor<T>& output) override {
+        return StatusCode::UNSUPPORTED_TYPE;
+    }
    private:
     bool transA_;
     bool transB_;
