@@ -1,0 +1,63 @@
+#include <iostream>
+#include <vector>
+#include <cuda_runtime.h>
+#include <glog/logging.h>
+#include "cuda_op/detail/cuBlas/copy.hpp"
+#include "data/tensor.hpp"
+
+using namespace cu_op_mem;
+
+float rand_float(){
+    return static_cast<float>(rand()) / RAND_MAX;
+}
+
+int main(int argc, char** argv){
+    cudaSetDevice(0);
+    cudaFree(0); // 强制初始化 CUDA 上下文
+    google::InitGoogleLogging(argv[0]);
+    
+    int n = 1024 * 1024; // 默认向量大小
+    
+    if(argc >= 2){
+        n = std::atoi(argv[1]);
+    }
+
+    std::cout << "COPY shape: (" << n << ")" << std::endl;
+
+    Tensor<float> x({static_cast<size_t>(n)});
+    Tensor<float> y({static_cast<size_t>(n)});
+
+    std::vector<float> h_x(n);
+    for(auto& v : h_x) v = rand_float();
+
+    cudaMemcpy(x.data(), h_x.data(), h_x.size() * sizeof(float), cudaMemcpyHostToDevice);
+
+    Copy<float> copy;
+
+    LOG(INFO) << "Start first Forward call";
+    copy.Forward(x, y);
+    cudaDeviceSynchronize();
+
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
+    LOG(INFO) << "Start timing loop";
+    cudaEventRecord(start);
+    for(int i = 0; i < 100; ++i){
+        copy.Forward(x, y);
+    }
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    
+    float ms = 0;
+    cudaEventElapsedTime(&ms, start, stop);
+
+    std::cout << "Average COPY time: " << ms / 100 << " ms" << std::endl;
+    std::cout << "Throughput: " << (n * sizeof(float) * 2 * 100) / (ms / 1000.0f) / 1e9 << " GB/s" << std::endl;
+
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+
+    return 0;
+}

@@ -33,8 +33,8 @@ include_directories(
 add_executable(
     bench_gemv
     bench_gemv.cpp
-    ${CMAKE_SOURCE_DIR}/../../../src/cuda_op/detail/cuBlas/gemv.cu
-    ${CMAKE_SOURCE_DIR}/../../../src/base/memory_pool.cu
+    ${CMAKE_SOURCE_DIR}/../src/cuda_op/detail/cuBlas/gemv.cu
+    ${CMAKE_SOURCE_DIR}/../src/base/memory_pool.cu
 )
 
 # 链接库文件
