@@ -37,7 +37,7 @@ __global__ void trsm_left_lower_parallel_kernel_float(int m, int n, float alpha,
         // 协作加载B的列到共享内存
         for (int i = 0; i < m; i += shared_size) {
             int idx = i + tid;
-            if (idx < m && tid < shared_size) {
+            if (idx < m) {
                 shared_B_parallel_data[tid] = B[idx * n + col];
             }
             __syncthreads();
@@ -45,9 +45,8 @@ __global__ void trsm_left_lower_parallel_kernel_float(int m, int n, float alpha,
             // 计算部分和
             for (int k = 0; k < blockDim.y && i + k < row; ++k) {
                 int k_idx = i + k;
-                int shared_idx = k * blockDim.x + threadIdx.x;
-                if (k_idx < row && shared_idx < shared_size) {
-                    sum -= A[row * m + k_idx] * shared_B_parallel_data[shared_idx];
+                if (k_idx < row) {
+                    sum -= A[row * m + k_idx] * shared_B_parallel_data[k * blockDim.x + threadIdx.x];
                 }
             }
             __syncthreads();
@@ -73,7 +72,7 @@ __global__ void trsm_left_lower_parallel_kernel_double(int m, int n, double alph
         // 协作加载B的列到共享内存
         for (int i = 0; i < m; i += shared_size) {
             int idx = i + tid;
-            if (idx < m && tid < shared_size) {
+            if (idx < m) {
                 shared_B_parallel_data_double[tid] = B[idx * n + col];
             }
             __syncthreads();
@@ -81,9 +80,8 @@ __global__ void trsm_left_lower_parallel_kernel_double(int m, int n, double alph
             // 计算部分和
             for (int k = 0; k < blockDim.y && i + k < row; ++k) {
                 int k_idx = i + k;
-                int shared_idx = k * blockDim.x + threadIdx.x;
-                if (k_idx < row && shared_idx < shared_size) {
-                    sum -= A[row * m + k_idx] * shared_B_parallel_data_double[shared_idx];
+                if (k_idx < row) {
+                    sum -= A[row * m + k_idx] * shared_B_parallel_data_double[k * blockDim.x + threadIdx.x];
                 }
             }
             __syncthreads();
@@ -114,16 +112,16 @@ __global__ void trsm_left_lower_blocked_kernel(int m, int n, T alpha, const T* A
             int tid_y = threadIdx.y;
             
             // 协作加载A的块
-            if (block + tid_y < m && block + tid_x < m && tid_y < BLOCK_SIZE && tid_x < BLOCK_SIZE) {
+            if (block + tid_y < m && block + tid_x < m) {
                 shared_A_block[tid_y][tid_x] = A[(block + tid_y) * m + block + tid_x];
-            } else if (tid_y < BLOCK_SIZE && tid_x < BLOCK_SIZE) {
+            } else {
                 shared_A_block[tid_y][tid_x] = 0;
             }
             
             // 协作加载B的块
-            if (block + tid_y < m && tid_y < BLOCK_SIZE) {
+            if (block + tid_y < m) {
                 shared_B_block[tid_y] = B[(block + tid_y) * n + col];
-            } else if (tid_y < BLOCK_SIZE) {
+            } else {
                 shared_B_block[tid_y] = 0;
             }
             
@@ -131,7 +129,7 @@ __global__ void trsm_left_lower_blocked_kernel(int m, int n, T alpha, const T* A
             
             // 计算部分和
             for (int k = 0; k < BLOCK_SIZE && block + k < row; ++k) {
-                if (block + k < m && row >= block && row < block + BLOCK_SIZE && k < BLOCK_SIZE) {
+                if (block + k < m) {
                     sum -= shared_A_block[row - block][k] * shared_B_block[k];
                 }
             }
@@ -161,28 +159,20 @@ __global__ void trsm_left_lower_vectorized_kernel(int m, int n, T alpha, const T
                 if constexpr (std::is_same_v<T, float>) {
                     const float4* A_vec = reinterpret_cast<const float4*>(A);
                     const float4* B_vec = reinterpret_cast<const float4*>(B);
-                    int a_idx = row * m / 4 + k / 4;
-                    int b_idx = k * n / 4 + col;
-                    if (a_idx < (m * m / 4) && b_idx < (m * n / 4)) {
-                        float4 a_val = A_vec[a_idx];
-                        float4 b_val = B_vec[b_idx];
-                        
-                        for (int i = 0; i < 4; ++i) {
-                            sum -= (&a_val.x)[i] * (&b_val.x)[i];
-                        }
+                    float4 a_val = A_vec[row * m / 4 + k / 4];
+                    float4 b_val = B_vec[k * n / 4 + col];
+                    
+                    for (int i = 0; i < 4; ++i) {
+                        sum -= (&a_val.x)[i] * (&b_val.x)[i];
                     }
                 } else if constexpr (std::is_same_v<T, double>) {
                     const double2* A_vec = reinterpret_cast<const double2*>(A);
                     const double2* B_vec = reinterpret_cast<const double2*>(B);
-                    int a_idx = row * m / 2 + k / 2;
-                    int b_idx = k * n / 2 + col;
-                    if (a_idx < (m * m / 2) && b_idx < (m * n / 2)) {
-                        double2 a_val = A_vec[a_idx];
-                        double2 b_val = B_vec[b_idx];
-                        
-                        for (int i = 0; i < 2; ++i) {
-                            sum -= (&a_val.x)[i] * (&b_val.x)[i];
-                        }
+                    double2 a_val = A_vec[row * m / 2 + k / 2];
+                    double2 b_val = B_vec[k * n / 2 + col];
+                    
+                    for (int i = 0; i < 2; ++i) {
+                        sum -= (&a_val.x)[i] * (&b_val.x)[i];
                     }
                 }
             }
