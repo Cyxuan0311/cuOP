@@ -22,11 +22,10 @@ StatusCode Flatten<T>::Forward(const Tensor<T>& input,Tensor<T>& output,int batc
 
     if(output.data() == nullptr || output.numel() != input.numel()) {
         output = Tensor<T>(out_shape);
-    } else {
+        cudaMemcpy(output.data(),input.data(),input.bytes(),cudaMemcpyDeviceToDevice);
+    }else {
         output.reshape(out_shape);
     }
-    // 无论哪种情况都需要复制数据
-    cudaMemcpy(output.data(), input.data(), input.bytes(), cudaMemcpyDeviceToDevice);
     return StatusCode::SUCCESS;
 }
 
