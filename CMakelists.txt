@@ -106,9 +106,12 @@ set_target_properties(cuop_cublas PROPERTIES OUTPUT_NAME "cuop_cublas" LIBRARY_O
 
 # 深度学习算子库 (自定义CUDA实现，不依赖cuDNN库)
 add_library(cuop_cudnn SHARED ${SRC_CUDNN})
-target_link_libraries(cuop_cudnn PRIVATE CUDA::cudart ${GLOG_LIBRARIES})
+target_link_libraries(cuop_cudnn PRIVATE CUDA::cudart CUDA::cublas ${GLOG_LIBRARIES})
 target_include_directories(cuop_cudnn PRIVATE ${CMAKE_SOURCE_DIR}/include)
 set_target_properties(cuop_cudnn PROPERTIES OUTPUT_NAME "cuop_cudnn" LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/lib")
+# 设置CUDA编译选项
+set_target_properties(cuop_cudnn PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+target_compile_options(cuop_cudnn PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xptxas=-v>)
 message(STATUS "Building cuop_cudnn library with custom CUDA implementations")
 
 # ==================== 安装配置 ====================
@@ -188,3 +191,6 @@ add_subdirectory(test/JIT_test)
 
 # 添加性能监控测试子目录
 add_subdirectory(test/performance)
+
+# 添加示例目录
+add_subdirectory(example)
