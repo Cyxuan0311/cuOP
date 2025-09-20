@@ -20,9 +20,8 @@ class View : public Operator<T> {
 
         StatusCode Forward(const Tensor<T>& input,Tensor<T>& output) override {
             if (offset_.empty() || new_shape_.empty()) {
-                // 如果没有设置参数，则使用输出张量的形状进行reshape
-                std::vector<std::size_t> zero_offset(input.shape().size(), 0);
-                return Forward(input, output, zero_offset, output.shape());
+                // 如果没有设置参数，则进行简单的reshape（保持数据不变）
+                return Forward(input, output, std::vector<std::size_t>(input.shape().size(), 0), input.shape());
             }
             return Forward(input, output, offset_, new_shape_);
         }
